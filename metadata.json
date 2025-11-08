@@ -1,0 +1,7 @@
+{
+  "name": "Contta CRM",
+  "description": "Contta CRM: A plataforma de prospecção inteligente da Ampla Contabilidade. Potencializado por IA para automatizar a captação de clientes e fornecer insights de negócios.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

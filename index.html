@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contta CRM</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet (for Maps) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    
+    <!-- PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .prose-invert a { color: #818cf8; } /* Fix prose link color to match Indigo-300 */
+
+        /* Custom Tooltip Style */
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            transform: translateX(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1f2937 transparent transparent transparent; /* Cor de fundo do tooltip (gray-800) */
+        }
+    </style>
+    
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0"
+      }
+    }
+    </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

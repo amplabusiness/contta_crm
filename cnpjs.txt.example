@@ -1,0 +1,12 @@
+# Arquivo de exemplo para carregar CNPJs
+# Coloque um CNPJ por linha (com ou sem formatação)
+# O script removerá automaticamente pontos, barras e traços
+
+# Exemplos:
+27865757000102
+12345678000190
+98765432000111
+
+# Você pode adicionar quantos CNPJs quiser
+# O script processará todos automaticamente
+
