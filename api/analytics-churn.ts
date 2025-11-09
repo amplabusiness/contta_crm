@@ -14,6 +14,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { analyzeChurnRiskV2 } from '../services/geminiService.v2.ts';
 import { rateLimit, getClientIp, rateLimitHeaders, RATE_LIMITS } from '../utils/rateLimit.ts';
 import { RateLimitError } from '../utils/errors.ts';
+import { 
+  createModuleLogger, 
+  logRequest, 
+  logResponse,
+  startPerformanceTracking,
+  logDatabaseOperation,
+} from '../utils/logger.ts';
+
+const logger = createModuleLogger('analytics-churn');
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -28,6 +37,9 @@ const httpCorsHeaders = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const perf = startPerformanceTracking();
+  const clientIp = getClientIp(req.headers);
+  
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -40,9 +52,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Log request inicial
+  logRequest({
+    method: req.method,
+    url: req.url || '/api/analytics-churn',
+    ip: clientIp,
+    userAgent: req.headers['user-agent'] as string,
+  });
+
   try {
     // 🛡️ RATE LIMITING
-    const clientIp = getClientIp(req.headers);
     const rateLimitInfo = await rateLimit(
       `ip:${clientIp}`,
       RATE_LIMITS.AI_ANALYSIS
@@ -53,19 +72,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader(key, value);
     });
     
-    console.log('[analytics-churn] Rate limit check passed', {
-      ip: clientIp,
-      remaining: rateLimitInfo.remaining,
-    });
+    perf.checkpoint('rate-limit-check');
+    
     // 1. Buscar todos os deals "Closed Won" (clientes ativos)
+    const dbStart = Date.now();
     const { data: deals, error: dealsError } = await supabase
       .from('deals')
       .select('*')
       .eq('stage', 'Closed Won');
 
     if (dealsError) throw dealsError;
+    
+    logDatabaseOperation({
+      operation: 'query',
+      table: 'deals',
+      duration: Date.now() - dbStart,
+      rowCount: deals?.length || 0,
+    });
+    
+    perf.checkpoint('fetch-deals');
 
     if (!deals || deals.length === 0) {
+      const duration = perf.finish();
+      logResponse({
+        method: req.method,
+        url: req.url || '/api/analytics-churn',
+        statusCode: 200,
+        duration,
+      });
       return res.status(200).json([]);
     }
 
@@ -112,11 +146,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4. Ordenar por risco (maior primeiro)
     churnPredictions.sort((a, b) => b.churnRisk - a.churnRisk);
+    
+    perf.checkpoint('ai-analysis');
 
     // 5. Retornar top 10 com maior risco
+    const duration = perf.finish();
+    
+    logger.info({
+      totalDeals: deals.length,
+      predictionsCount: churnPredictions.length,
+      duration: `${duration.toFixed(2)}ms`,
+    }, 'Churn analysis completed successfully');
+    
+    logResponse({
+      method: req.method,
+      url: req.url || '/api/analytics-churn',
+      statusCode: 200,
+      duration,
+    });
+    
     return res.status(200).json(churnPredictions.slice(0, 10));
 
   } catch (error: any) {
+    const duration = perf.finish();
+    
     // Tratar erro de rate limit separadamente
     if (error instanceof RateLimitError) {
       Object.entries(rateLimitHeaders({
@@ -128,6 +181,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader(key, value);
       });
       
+      logResponse({
+        method: req.method,
+        url: req.url || '/api/analytics-churn',
+        statusCode: 429,
+        duration,
+        error,
+      });
+      
       return res.status(429).json({
         error: 'Rate limit exceeded',
         message: error.message,
@@ -135,9 +196,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     
-    console.error('Erro ao gerar predições de churn:', error);
+    logger.error({
+      error,
+      url: req.url,
+      duration: `${duration.toFixed(2)}ms`,
+    }, 'Churn analysis failed');
+    
+    logResponse({
+      method: req.method,
+      url: req.url || '/api/analytics-churn',
+      statusCode: 500,
+      duration,
+      error,
+    });
+    
     return res.status(500).json({
-      error: 'Erro ao gerar análise de churn',
+      error: 'Erro ao gerar predições de churn',
       message: error.message
     });
   }

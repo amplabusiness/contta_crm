@@ -3,11 +3,12 @@
  * 
  * Versão otimizada com:
  * - Retry logic exponencial
- * - Caching inteligente
+ * - Caching inteligente (Redis)
  * - Validação robusta de outputs
  * - Performance monitoring
  * - Error boundaries
  * - Type safety melhorado
+ * - Logging estruturado (Pino)
  */
 
 import { GoogleGenAI, Type } from "@google/genai";
@@ -23,6 +24,14 @@ import {
   formatErrorForLogging,
 } from '../utils/errors.ts';
 import { cache as redisCache, buildCacheKey, cacheAside } from '../utils/cache.ts';
+import { 
+  createModuleLogger, 
+  trackPerformance,
+  logCacheOperation,
+  logExternalAPI,
+} from '../utils/logger.ts';
+
+const logger = createModuleLogger('gemini-service');
 
 // ============================================================================
 // CONFIGURAÇÃO & INICIALIZAÇÃO
@@ -75,7 +84,8 @@ function safelyParseJson<T>(jsonString: string): T | null {
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
-  baseDelay = 1000
+  baseDelay = 1000,
+  correlationId?: string
 ): Promise<T> {
   let lastError: Error | null = null;
   
@@ -87,15 +97,24 @@ async function retryWithBackoff<T>(
       
       if (attempt < maxRetries - 1) {
         const delay = baseDelay * Math.pow(2, attempt);
-        console.warn(`[geminiService] Retry ${attempt + 1}/${maxRetries} após ${delay}ms`, {
+        logger.warn({
+          correlationId,
+          attempt: attempt + 1,
+          maxRetries,
+          delay: `${delay}ms`,
           error: lastError.message,
-        });
+        }, `Retry attempt ${attempt + 1}/${maxRetries}`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
   
   metrics.failedRequests++;
+  logger.error({
+    correlationId,
+    maxRetries,
+    error: lastError,
+  }, 'Max retries exceeded');
   throw lastError || new Error('Max retries exceeded');
 }
 
@@ -245,6 +264,7 @@ Calcule risk_score (0-100) baseado em:
   `.trim();
   
       try {
+        const apiStartTime = Date.now();
         const result = await retryWithBackoff(async () => {
           const response = await ai.models.generateContent({
             model,
@@ -265,17 +285,27 @@ Calcule risk_score (0-100) baseado em:
           }
           
           return parsed;
+        }, 3, 1000, correlationId);
+        
+        const apiDuration = Date.now() - apiStartTime;
+        logExternalAPI({
+          service: 'Gemini',
+          endpoint: '/generateContent',
+          method: 'POST',
+          statusCode: 200,
+          duration: apiDuration,
+          correlationId,
         });
         
         const elapsed = Date.now() - startTime;
         metrics.avgResponseTime = (metrics.avgResponseTime + elapsed) / 2;
         
-        console.log('[analyzeChurnRisk] Success', {
+        logger.info({
           company: dealData.company_name,
           riskScore: result.risk_score,
-          elapsed: `${elapsed}ms`,
+          duration: `${elapsed}ms`,
           correlationId,
-        });
+        }, `Churn analysis completed: ${dealData.company_name}`);
         
         return result;
         
@@ -283,13 +313,12 @@ Calcule risk_score (0-100) baseado em:
         const elapsed = Date.now() - startTime;
         metrics.failedRequests++;
         
-        const errorLog = formatErrorForLogging(error);
-        console.error('[analyzeChurnRisk] Failed', {
-          ...errorLog,
+        logger.error({
+          error,
           company: dealData.company_name,
-          elapsed: `${elapsed}ms`,
+          duration: `${elapsed}ms`,
           correlationId,
-        });
+        }, 'Churn analysis failed, using fallback');
         
         // Fallback heurístico
         const fallbackScore = Math.min(
@@ -298,10 +327,11 @@ Calcule risk_score (0-100) baseado em:
           (dealData.task_completion_rate < 0.3 ? 30 : 0)
         );
         
-        console.warn('[analyzeChurnRisk] Using fallback heuristic', {
+        logger.warn({
           correlationId,
           fallbackScore,
-        });
+          company: dealData.company_name,
+        }, 'Using fallback heuristic');
         
         return {
           risk_score: fallbackScore,
@@ -392,6 +422,7 @@ ${JSON.stringify(dealData, null, 2)}
   `.trim();
   
   try {
+    const apiStartTime = Date.now();
     const result = await retryWithBackoff(async () => {
       const response = await ai.models.generateContent({
         model,
@@ -408,25 +439,34 @@ ${JSON.stringify(dealData, null, 2)}
       }
       
       return parsed;
+    }, 3, 1000, correlationId);
+    
+    const apiDuration = Date.now() - apiStartTime;
+    logExternalAPI({
+      service: 'Gemini',
+      endpoint: '/generateContent',
+      method: 'POST',
+      statusCode: 200,
+      duration: apiDuration,
+      correlationId,
     });
     
     const elapsed = Date.now() - startTime;
-    console.log('[analyzeUpsell] Success', {
+    logger.info({
       company: dealData.company_name,
       confidence: result.confidence,
-      elapsed: `${elapsed}ms`,
+      duration: `${elapsed}ms`,
       correlationId,
-    });
+    }, `Upsell analysis completed: ${dealData.company_name}`);
     
     return result;
     
   } catch (error) {
-    const errorLog = formatErrorForLogging(error);
-    console.error('[analyzeUpsell] Failed', {
-      ...errorLog,
+    logger.error({
+      error,
       company: dealData.company_name,
       correlationId,
-    });
+    }, 'Upsell analysis failed, using fallback');
     
     // Fallback heurístico
     return {

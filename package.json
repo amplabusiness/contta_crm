@@ -10,6 +10,7 @@
     "test:ai": "tsx scripts/test-ai-services.js",
     "test:ai:v2": "tsx scripts/test-gemini-optimizations.js",
     "test:ratelimit": "tsx scripts/test-rate-limiting.js",
+    "test:logging": "tsx scripts/test-logging.js",
     "qa:supabase": "node scripts/qa-queries.js",
     "qa:rls": "node scripts/qa-rls.js",
     "seed:demo": "node scripts/seed-demo-data.js"
@@ -19,6 +20,8 @@
     "@supabase/supabase-js": "^2.80.0",
     "@upstash/redis": "^1.35.6",
     "dotenv": "^17.2.3",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.3.0"

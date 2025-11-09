@@ -14,6 +14,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { analyzeUpsellOpportunityV2 } from '../services/geminiService.v2.ts';
 import { rateLimit, getClientIp, rateLimitHeaders, RATE_LIMITS } from '../utils/rateLimit.ts';
 import { RateLimitError } from '../utils/errors.ts';
+import { 
+  createModuleLogger, 
+  logRequest, 
+  logResponse,
+  startPerformanceTracking,
+  logDatabaseOperation,
+} from '../utils/logger.ts';
+
+const logger = createModuleLogger('analytics-upsell');
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -21,6 +30,9 @@ const supabase = createClient(
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const perf = startPerformanceTracking();
+  const clientIp = getClientIp(req.headers);
+  
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,9 +45,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Log request inicial
+  logRequest({
+    method: req.method,
+    url: req.url || '/api/analytics-upsell',
+    ip: clientIp,
+    userAgent: req.headers['user-agent'] as string,
+  });
+
   try {
     // 🛡️ RATE LIMITING
-    const clientIp = getClientIp(req.headers);
     const rateLimitInfo = await rateLimit(
       `ip:${clientIp}`,
       RATE_LIMITS.AI_ANALYSIS
@@ -46,11 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader(key, value);
     });
     
-    console.log('[analytics-upsell] Rate limit check passed', {
-      ip: clientIp,
-      remaining: rateLimitInfo.remaining,
-    });
+    perf.checkpoint('rate-limit-check');
+    
     // 1. Buscar deals "Closed Won" (clientes ativos)
+    const dbStart = Date.now();
     const { data: deals, error: dealsError } = await supabase
       .from('deals')
       .select('*')
@@ -59,8 +77,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .limit(20); // Top 20 clientes por valor
 
     if (dealsError) throw dealsError;
+    
+    logDatabaseOperation({
+      operation: 'query',
+      table: 'deals',
+      duration: Date.now() - dbStart,
+      rowCount: deals?.length || 0,
+    });
+    
+    perf.checkpoint('fetch-deals');
 
     if (!deals || deals.length === 0) {
+      const duration = perf.finish();
+      logResponse({
+        method: req.method,
+        url: req.url || '/api/analytics-upsell',
+        statusCode: 200,
+        duration,
+      });
       return res.status(200).json([]);
     }
 
@@ -104,11 +138,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 3. Ordenar por valor potencial (maior primeiro)
     upsellOpportunities.sort((a, b) => b.potentialValue - a.potentialValue);
+    
+    perf.checkpoint('ai-analysis');
 
     // 4. Retornar top 10
+    const duration = perf.finish();
+    
+    logger.info({
+      totalDeals: deals.length,
+      opportunitiesCount: upsellOpportunities.length,
+      duration: `${duration.toFixed(2)}ms`,
+    }, 'Upsell analysis completed successfully');
+    
+    logResponse({
+      method: req.method,
+      url: req.url || '/api/analytics-upsell',
+      statusCode: 200,
+      duration,
+    });
+    
     return res.status(200).json(upsellOpportunities.slice(0, 10));
 
   } catch (error: any) {
+    const duration = perf.finish();
+    
     // Tratar erro de rate limit separadamente
     if (error instanceof RateLimitError) {
       Object.entries(rateLimitHeaders({
@@ -120,6 +173,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader(key, value);
       });
       
+      logResponse({
+        method: req.method,
+        url: req.url || '/api/analytics-upsell',
+        statusCode: 429,
+        duration,
+        error,
+      });
+      
       return res.status(429).json({
         error: 'Rate limit exceeded',
         message: error.message,
@@ -127,7 +188,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     
-    console.error('Erro ao gerar oportunidades de upsell:', error);
+    logger.error({
+      error,
+      url: req.url,
+      duration: `${duration.toFixed(2)}ms`,
+    }, 'Upsell analysis failed');
+    
+    logResponse({
+      method: req.method,
+      url: req.url || '/api/analytics-upsell',
+      statusCode: 500,
+      duration,
+      error,
+    });
+    
     return res.status(500).json({
       error: 'Erro ao gerar análise de upsell',
       message: error.message
