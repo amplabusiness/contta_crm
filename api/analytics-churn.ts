@@ -21,6 +21,12 @@ import {
   startPerformanceTracking,
   logDatabaseOperation,
 } from '../utils/logger.ts';
+import {
+  captureError,
+  addHttpBreadcrumb,
+  addDatabaseBreadcrumb,
+  trackTransaction,
+} from '../utils/sentry.ts';
 
 const logger = createModuleLogger('analytics-churn');
 
@@ -59,6 +65,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ip: clientIp,
     userAgent: req.headers['user-agent'] as string,
   });
+  
+  // Sentry breadcrumb
+  addHttpBreadcrumb({
+    method: req.method,
+    url: req.url || '/api/analytics-churn',
+  });
 
   try {
     // 🛡️ RATE LIMITING
@@ -83,10 +95,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (dealsError) throw dealsError;
     
+    const dbDuration = Date.now() - dbStart;
     logDatabaseOperation({
       operation: 'query',
       table: 'deals',
-      duration: Date.now() - dbStart,
+      duration: dbDuration,
+      rowCount: deals?.length || 0,
+    });
+    
+    // Sentry breadcrumb
+    addDatabaseBreadcrumb({
+      operation: 'query',
+      table: 'deals',
       rowCount: deals?.length || 0,
     });
     
@@ -201,6 +221,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       url: req.url,
       duration: `${duration.toFixed(2)}ms`,
     }, 'Churn analysis failed');
+    
+    // Capturar erro no Sentry (exceto rate limits esperados)
+    if (!(error instanceof RateLimitError)) {
+      captureError(error, {
+        endpoint: req.url || '/api/analytics-churn',
+        method: req.method,
+        ip: clientIp,
+        duration: `${duration.toFixed(2)}ms`,
+      });
+    }
     
     logResponse({
       method: req.method,
