@@ -116,7 +116,7 @@ const normalizeDate = (date?: string | null): string => {
 };
 
 const ensureArray = <T>(value: T[] | T | null | undefined): T[] => {
-  if (!value && value !== 0) {
+  if (!value) {
     return [];
   }
   if (Array.isArray(value)) {
