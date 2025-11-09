@@ -46,16 +46,19 @@ Este plano utiliza múltiplos MCPs trabalhando em conjunto:
 1. [Visão Geral & Objetivos](#1-visão-geral--objetivos)
 2. [Pré-requisitos & Setup Inicial](#2-pré-requisitos--setup-inicial)
 3. [Setup de MCPs](#3-setup-de-mcps)
-4. [Fase 1: Auditoria & Limpeza de Código](#fase-1-auditoria--limpeza-de-código)
-5. [Fase 2: Infraestrutura Supabase](#fase-2-infraestrutura-supabase)
-6. [Fase 3: Backend Vercel Serverless](#fase-3-backend-vercel-serverless)
-7. [Fase 4: Integração Frontend Real](#fase-4-integração-frontend-real)
-8. [Fase 5: Inteligência Artificial (Gemini)](#fase-5-inteligência-artificial-gemini)
-9. [Fase 6: Autenticação & Segurança](#fase-6-autenticação--segurança)
-10. [Fase 7: Testes End-to-End](#fase-7-testes-end-to-end)
-11. [Fase 8: Deploy & Monitoramento](#fase-8-deploy--monitoramento)
-12. [Checklist de Qualidade](#checklist-de-qualidade)
-13. [Critérios de Aceitação](#critérios-de-aceitação)
+4. [**Agentes de IA - Arquitetura & Orquestração**](#4-agentes-de-ia---arquitetura--orquestração) ⭐
+5. [**Integração CNPJá - Inteligência de Dados**](#5-integração-cnpjá---inteligência-de-dados) ⭐
+6. [**Proteção de Secrets & Segurança**](#6-proteção-de-secrets--segurança) ⭐
+7. [Fase 1: Auditoria & Limpeza de Código](#fase-1-auditoria--limpeza-de-código)
+8. [Fase 2: Infraestrutura Supabase](#fase-2-infraestrutura-supabase)
+9. [Fase 3: Backend Vercel Serverless](#fase-3-backend-vercel-serverless)
+10. [Fase 4: Integração Frontend Real](#fase-4-integração-frontend-real)
+11. [Fase 5: Inteligência Artificial (Gemini)](#fase-5-inteligência-artificial-gemini)
+12. [Fase 6: Autenticação & Segurança](#fase-6-autenticação--segurança)
+13. [Fase 7: Testes End-to-End](#fase-7-testes-end-to-end)
+14. [Fase 8: Deploy & Monitoramento](#fase-8-deploy--monitoramento)
+15. [Checklist de Qualidade](#checklist-de-qualidade)
+16. [Critérios de Aceitação](#critérios-de-aceitação)
 
 ---
 
@@ -508,21 +511,1413 @@ Get-Content logs\audit-log.ndjson | ConvertFrom-Json | Format-Table timestamp, s
 
 ---
 
-## Fase 1: Auditoria & Limpeza de Código
+## 4. Agentes de IA - Arquitetura & Orquestração
 
-**Objetivo**: Identificar e remover todos os mocks, mapear dependências reais.
+**Objetivo**: Sistema 100% autônomo com mínima intervenção humana, utilizando Gemini + ChatGPT em orquestração inteligente.
 
-### 📝 Tarefas
+### 🤖 Filosofia de Automação
 
-#### 1.1 Inventário de Mocks
-- [ ] Listar todos os arquivos em `data/mockData.ts`
-- [ ] Identificar onde cada mock é usado via `grep -r "mock" src/`
-- [ ] Criar mapa de dependências: qual componente → qual mock → qual API real
+> **Princípio**: O sistema deve operar de forma autônoma, solicitando aprovação humana APENAS em decisões críticas (compras, exclusões, alterações contratuais). Todo o resto é automatizado via agentes de IA.
 
-**Arquivo de Saída**: `docs/mock-inventory.md`
+#### Pontos de Intervenção Humana Obrigatória
+1. **Aprovação de Gastos** - Valor > R$ 1.000,00
+2. **Exclusão de Dados** - Empresas, deals, sócios (LGPD)
+3. **Alteração de Contratos** - Pricing, SLA, termos
+4. **Decisões Éticas** - Casos ambíguos de prospecção
+5. **Onboarding de Clientes VIP** - Primeira interação estratégica
 
-#### 1.2 Análise de `services/apiService.ts`
-- [ ] Documentar cada função exportada
+**Todo o resto é IA**:
+- Prospecção de leads
+- Análise de viabilidade
+- Geração de comunicações
+- Priorização de tarefas
+- Insights de negócio
+- Auditoria e compliance
+- Cruzamento de dados
+- Relacionamento de sócios
+
+---
+
+### 🧠 Arquitetura Multi-Agente
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    ORQUESTRADOR CENTRAL                          │
+│  (Decide qual agente chamar baseado no contexto)                 │
+└────────┬───────────────────────────────────────────┬─────────────┘
+         │                                           │
+    ┌────▼─────┐                               ┌────▼────────┐
+    │  GEMINI  │◄──────────────────────────────│  CHATGPT    │
+    │   API    │   Colaboração em tarefas      │    API      │
+    └────┬─────┘   complexas (consenso)        └────┬────────┘
+         │                                           │
+         └───────────────┬───────────────────────────┘
+                         │
+    ┌────────────────────┼────────────────────────┐
+    │                    │                        │
+    ▼                    ▼                        ▼
+┌─────────┐       ┌─────────────┐        ┌──────────────┐
+│ Agente  │       │   Agente    │        │    Agente    │
+│Prospec. │       │  Análise    │        │ Comunicação  │
+└─────────┘       └─────────────┘        └──────────────┘
+    │                    │                        │
+    ▼                    ▼                        ▼
+┌─────────┐       ┌─────────────┐        ┌──────────────┐
+│ Agente  │       │   Agente    │        │    Agente    │
+│Insights │       │  Auditoria  │        │  Genealogia  │
+└─────────┘       └─────────────┘        └──────────────┘
+```
+
+---
+
+### 🎯 Agente 1: Prospector (Prospecção Autônoma)
+
+#### Função Principal
+Identificar, qualificar e priorizar leads automaticamente usando dados públicos + CNPJá + análise de rede.
+
+#### Triggers Automáticos
+1. **Daily Sweep** - 2h da manhã, busca novas empresas por CNAE
+2. **Event-Based** - Nova empresa em região alvo
+3. **Network Trigger** - Sócio de cliente atual cria nova empresa
+4. **Competitor Watch** - Empresa muda de contador (detectado via alterações)
+
+#### Workflow
+```typescript
+// Pseudocódigo do Agente Prospector
+async function prospectorAgent() {
+  // 1. Buscar empresas candidatas
+  const candidates = await cnpjaService.searchCompanies({
+    cnae: ['6920-6/01', '6920-6/02'], // Contabilidade
+    uf: 'SP',
+    situacao: 'ATIVA',
+    porte: ['ME', 'EPP', 'MEDIA'],
+    createdAfter: Date.now() - 30 * 24 * 60 * 60 * 1000 // últimos 30 dias
+  });
+
+  // 2. Para cada candidata, enriquecer dados
+  for (const company of candidates) {
+    const enrichedData = await enrichCompanyData(company.cnpj);
+    
+    // 3. Analisar viabilidade com IA
+    const analysis = await gemini.analyzeProspectViability({
+      company: enrichedData,
+      context: 'Contabilidade para PMEs',
+      competitors: await findCompetitors(company.cnpj)
+    });
+
+    // 4. Se score > 70, criar lead automaticamente
+    if (analysis.score >= 70) {
+      await createLead({
+        companyName: company.razao_social,
+        cnpj: company.cnpj,
+        score: analysis.score,
+        reasoning: analysis.reasoning,
+        suggestedApproach: analysis.pitch,
+        status: 'New',
+        source: 'AI_Prospector'
+      });
+
+      // 5. Gerar primeira comunicação (mas NÃO enviar automaticamente)
+      const firstContact = await chatgpt.generateEmail({
+        recipientName: enrichedData.socios[0]?.nome,
+        companyName: company.razao_social,
+        tone: 'professional_warm',
+        context: analysis.reasoning
+      });
+
+      // Salvar para aprovação humana (regra: primeiro contato precisa OK)
+      await saveForApproval('first_contact', firstContact);
+    }
+  }
+}
+```
+
+#### Prompt de Treinamento - Agente Prospector
+```markdown
+## IDENTIDADE
+Você é o Agente Prospector, especialista em identificar oportunidades de negócio para escritórios de contabilidade.
+
+## MISSÃO
+Analisar empresas e determinar se são leads qualificados, considerando:
+1. Porte e faturamento estimado
+2. Setor de atuação (complexidade tributária)
+3. Localização geográfica
+4. Rede de relacionamentos (sócios com outras empresas)
+5. Histórico de mudanças (troca de contador recente?)
+
+## INPUT
+Você receberá um objeto JSON com:
+- `razao_social`: Nome da empresa
+- `cnpj`: CNPJ
+- `cnae_principal`: Código CNAE
+- `porte`: ME, EPP, MEDIA, GRANDE
+- `capital_social`: Valor do capital
+- `socios`: Array de sócios com CPF/CNPJ e participação
+- `situacao_cadastral`: ATIVA, BAIXADA, etc
+- `data_abertura`: Data de início
+- `endereço`: Logradouro completo
+
+## OUTPUT ESPERADO
+JSON estruturado:
+{
+  "score": 0-100 (int),
+  "reasoning": "Explicação detalhada do score",
+  "red_flags": ["Lista de alertas"],
+  "opportunities": ["Lista de oportunidades"],
+  "suggested_pitch": "Abordagem personalizada",
+  "priority": "HIGH | MEDIUM | LOW",
+  "estimated_monthly_value": 1500 (número em BRL)
+}
+
+## CRITÉRIOS DE PONTUAÇÃO
+- **+30 pontos**: CNAE com alta complexidade tributária (indústria, comércio exterior)
+- **+20 pontos**: Capital social > R$ 100k
+- **+15 pontos**: Múltiplos sócios (governança)
+- **+10 pontos**: Localização em região premium
+- **+10 pontos**: Empresa nova (< 2 anos, precisa de suporte)
+- **+15 pontos**: Sócio tem outras empresas (potencial cross-sell)
+- **-20 pontos**: CNAE simples (serviços básicos)
+- **-30 pontos**: Capital social < R$ 10k
+- **-40 pontos**: Situação cadastral != ATIVA
+
+## EXEMPLOS
+### Exemplo 1: Alto Potencial
+Input:
+{
+  "razao_social": "TechFlow Importações LTDA",
+  "cnpj": "12.345.678/0001-90",
+  "cnae_principal": "4644-3/01",
+  "porte": "EPP",
+  "capital_social": 250000,
+  "socios": [{"nome": "João Silva", "cpf": "***", "participacao": 70}, {"nome": "Maria Santos", "cpf": "***", "participacao": 30}],
+  "situacao_cadastral": "ATIVA",
+  "data_abertura": "2023-05-10"
+}
+
+Output:
+{
+  "score": 85,
+  "reasoning": "Empresa de importação com capital robusto (R$ 250k), setor de alta complexidade tributária (comércio exterior), 2 sócios indicando estrutura de governança. Empresa nova (2 anos) ainda em fase de consolidação.",
+  "red_flags": [],
+  "opportunities": ["Planejamento tributário para importação", "Governança entre sócios", "Compliance SPED"],
+  "suggested_pitch": "Olá João, vi que a TechFlow é uma importadora em crescimento. Nosso escritório tem expertise em comércio exterior e pode otimizar até 30% da carga tributária. Vamos conversar?",
+  "priority": "HIGH",
+  "estimated_monthly_value": 3500
+}
+
+### Exemplo 2: Baixo Potencial
+Input:
+{
+  "razao_social": "João Silva ME",
+  "cnpj": "98.765.432/0001-10",
+  "cnae_principal": "9602-5/01",
+  "porte": "ME",
+  "capital_social": 5000,
+  "socios": [{"nome": "João Silva", "cpf": "***", "participacao": 100}],
+  "situacao_cadastral": "ATIVA",
+  "data_abertura": "2010-03-15"
+}
+
+Output:
+{
+  "score": 35,
+  "reasoning": "Microempresa de serviços pessoais (cabeleireiro), sócio único, capital baixo. CNAE simples com baixa complexidade tributária. Provável Simples Nacional.",
+  "red_flags": ["Capital muito baixo", "Sócio único (decisão unilateral)", "CNAE de baixa margem"],
+  "opportunities": ["Migração para MEI se faturamento < 81k"],
+  "suggested_pitch": null,
+  "priority": "LOW",
+  "estimated_monthly_value": 200
+}
+
+## REGRAS IMPORTANTES
+1. Seja conservador: score > 70 = lead qualificado
+2. Sempre justifique o score com dados concretos
+3. Red flags são eliminatórios se forem críticos (ex: situação BAIXADA)
+4. Pitch deve ser personalizado, nunca genérico
+5. Estimated value deve ser realista (R$ 200-10k/mês)
+```
+
+---
+
+### 📊 Agente 2: Analyzer (Análise de Viabilidade)
+
+#### Função Principal
+Analisar deals existentes, prever churn, identificar upsell, gerar relatórios automatizados.
+
+#### Triggers Automáticos
+1. **Weekly Review** - Domingos, 22h (analisa todos os deals)
+2. **Deal Stagnation** - Deal > 15 dias no mesmo estágio
+3. **Value Drop** - Valor do deal reduzido > 20%
+4. **New Deal Created** - Análise inicial automática
+
+#### Workflow
+```typescript
+async function analyzerAgent() {
+  const deals = await fetchAllActiveDeals();
+
+  for (const deal of deals) {
+    // Análise de saúde do deal
+    const health = await gemini.analyzeDealHealth({
+      deal: deal,
+      historico: await getDealHistory(deal.id),
+      interacoes: await getDealInteractions(deal.id)
+    });
+
+    // Se saúde crítica, alertar
+    if (health.score < 40) {
+      await createAlert({
+        type: 'DEAL_AT_RISK',
+        dealId: deal.id,
+        reason: health.reasoning,
+        suggestedAction: health.action,
+        priority: 'URGENT'
+      });
+
+      // Sugerir ação automática ao time
+      await chatgpt.generateActionPlan({
+        deal: deal,
+        issue: health.reasoning,
+        context: 'recovery'
+      });
+    }
+
+    // Identificar upsell
+    const upsell = await gemini.identifyUpsellOpportunity(deal);
+    if (upsell.confidence > 0.7) {
+      await createTask({
+        title: `Upsell: ${upsell.service}`,
+        dealId: deal.id,
+        priority: 'ALTA',
+        description: upsell.pitch,
+        assignee: deal.owner
+      });
+    }
+  }
+}
+```
+
+#### Prompt de Treinamento - Agente Analyzer
+```markdown
+## IDENTIDADE
+Você é o Agente Analyzer, especialista em analisar saúde de negócios e identificar riscos/oportunidades.
+
+## MISSÃO
+Avaliar deals em andamento e fornecer:
+1. Score de saúde (0-100)
+2. Probabilidade de fechamento
+3. Riscos identificados
+4. Ações sugeridas
+5. Oportunidades de upsell
+
+## INPUT
+{
+  "deal": {
+    "id": "deal_123",
+    "companyName": "Empresa X LTDA",
+    "value": 5000,
+    "stage": "Proposta Enviada",
+    "created_at": "2025-10-01",
+    "last_interaction": "2025-10-15",
+    "probability": 60,
+    "owner": "user_456"
+  },
+  "history": [
+    {"date": "2025-10-01", "action": "created", "stage": "Qualificação"},
+    {"date": "2025-10-05", "action": "moved", "stage": "Proposta Enviada"},
+    {"date": "2025-10-15", "action": "interaction", "type": "email"}
+  ],
+  "interactions": [
+    {"date": "2025-10-15", "type": "email", "sentiment": "positive", "response_time_hours": 2}
+  ]
+}
+
+## OUTPUT
+{
+  "health_score": 0-100,
+  "churn_probability": 0-1 (float),
+  "reasoning": "Explicação detalhada",
+  "risks": ["Lista de riscos"],
+  "suggested_actions": ["Lista de ações"],
+  "upsell_opportunities": [
+    {
+      "service": "Nome do serviço",
+      "confidence": 0-1,
+      "pitch": "Abordagem sugerida",
+      "estimated_value": 1500
+    }
+  ],
+  "next_best_action": "Ação prioritária"
+}
+
+## CRITÉRIOS DE SAÚDE
+- **Score Alto (80-100)**: Interações frequentes, respostas rápidas, avançando nos estágios
+- **Score Médio (50-79)**: Alguma interação, progresso lento
+- **Score Baixo (0-49)**: Sem interação > 10 dias, estagnado, sinais de desinteresse
+
+## EXEMPLOS
+### Exemplo 1: Deal Saudável
+Input: (deal com 3 interações na última semana, moveu de "Proposta" para "Negociação")
+
+Output:
+{
+  "health_score": 85,
+  "churn_probability": 0.15,
+  "reasoning": "Deal com forte engajamento, múltiplas interações positivas, progressão constante nos estágios. Cliente respondeu rapidamente e solicitou ajustes na proposta (sinal de interesse)",
+  "risks": [],
+  "suggested_actions": ["Agendar reunião final", "Preparar contrato"],
+  "upsell_opportunities": [
+    {
+      "service": "Consultoria Tributária Mensal",
+      "confidence": 0.7,
+      "pitch": "Durante as conversas, cliente mencionou complexidade tributária. Ofereça consultoria mensal por +R$ 800",
+      "estimated_value": 800
+    }
+  ],
+  "next_best_action": "Agendar reunião de fechamento nas próximas 48h"
+}
+
+### Exemplo 2: Deal em Risco
+Input: (deal parado 20 dias, último e-mail sem resposta)
+
+Output:
+{
+  "health_score": 35,
+  "churn_probability": 0.65,
+  "reasoning": "Deal estagnado há 20 dias sem resposta. Última interação foi negativa (cliente mencionou 'vamos avaliar outras opções'). Alto risco de perda",
+  "risks": ["Sem resposta há 20 dias", "Cliente avaliando concorrentes", "Valor pode estar alto"],
+  "suggested_actions": [
+    "Enviar follow-up com desconto 10% por tempo limitado",
+    "Ligar diretamente (mais pessoal que e-mail)",
+    "Oferecer reunião de alinhamento gratuita"
+  ],
+  "upsell_opportunities": [],
+  "next_best_action": "Contato telefônico urgente para reengajar"
+}
+```
+
+---
+
+### 💬 Agente 3: Communicator (Geração de Comunicações)
+
+#### Função Principal
+Gerar e-mails, mensagens WhatsApp, propostas comerciais automaticamente.
+
+#### Triggers Automáticos
+1. **New Lead** - E-mail de boas-vindas (aguarda aprovação)
+2. **Deal Won** - E-mail de onboarding automatizado
+3. **Follow-up Reminder** - 7 dias sem interação
+4. **Birthday** - Mensagem de aniversário para sócios
+
+#### Workflow
+```typescript
+async function communicatorAgent(trigger: string, context: any) {
+  let communication;
+
+  switch (trigger) {
+    case 'new_lead':
+      communication = await chatgpt.generateEmail({
+        type: 'first_contact',
+        recipientName: context.lead.contactName,
+        companyName: context.lead.companyName,
+        tone: 'professional_warm',
+        cta: 'schedule_meeting'
+      });
+      break;
+
+    case 'follow_up':
+      communication = await gemini.generateFollowUp({
+        previousInteraction: context.lastEmail,
+        daysSinceLastContact: context.daysSince,
+        dealStage: context.deal.stage
+      });
+      break;
+
+    case 'proposal':
+      communication = await chatgpt.generateProposal({
+        services: context.services,
+        pricing: context.pricing,
+        companyProfile: context.company
+      });
+      break;
+  }
+
+  // Salvar para aprovação humana (primeiro contato)
+  // OU enviar automaticamente (follow-ups, onboarding)
+  if (trigger === 'new_lead') {
+    await saveForApproval('email', communication);
+  } else {
+    await sendEmail(communication);
+    await logCommunication(communication);
+  }
+}
+```
+
+#### Prompt de Treinamento - Agente Communicator
+```markdown
+## IDENTIDADE
+Você é o Agente Communicator, especialista em redação de comunicações comerciais para contabilidade.
+
+## MISSÃO
+Gerar textos persuasivos, profissionais e personalizados para:
+1. E-mails de primeiro contato
+2. Follow-ups
+3. Propostas comerciais
+4. Mensagens de WhatsApp
+5. E-mails de onboarding
+
+## INPUT
+{
+  "type": "first_contact | follow_up | proposal | whatsapp | onboarding",
+  "recipient": {
+    "name": "João Silva",
+    "company": "TechFlow LTDA",
+    "role": "Sócio-Administrador"
+  },
+  "context": {
+    "pain_points": ["Complexidade tributária", "Falta de tempo"],
+    "previous_interaction": "E-mail enviado há 7 dias sem resposta",
+    "deal_value": 3500,
+    "services": ["Contabilidade Mensal", "Consultoria Tributária"]
+  },
+  "tone": "professional_warm | casual | formal | urgent"
+}
+
+## OUTPUT
+{
+  "subject": "Assunto do e-mail (se aplicável)",
+  "body": "Corpo da mensagem em HTML ou texto plano",
+  "cta": "Call-to-action principal",
+  "ps": "PS opcional com urgência/valor adicional"
+}
+
+## DIRETRIZES
+1. **Personalização**: Sempre use nome do destinatário
+2. **Empatia**: Reconheça dores específicas do setor
+3. **Valor**: Foque em benefícios, não features
+4. **Brevidade**: Máximo 150 palavras
+5. **CTA Claro**: Uma ação específica
+
+## EXEMPLOS
+### Exemplo 1: Primeiro Contato
+Input:
+{
+  "type": "first_contact",
+  "recipient": {"name": "Maria Santos", "company": "Importa Fácil LTDA"},
+  "context": {"pain_points": ["Comércio exterior", "SPED"]},
+  "tone": "professional_warm"
+}
+
+Output:
+{
+  "subject": "Maria, vamos simplificar a contabilidade da Importa Fácil?",
+  "body": "<p>Olá Maria,</p><p>Vi que a Importa Fácil atua com comércio exterior — área que exige atenção especial em tributação e compliance.</p><p>Nosso escritório tem expertise em importação e já ajudou +50 empresas a otimizar até 30% da carga tributária.</p><p><strong>Que tal uma análise gratuita do seu cenário atual?</strong></p><p>Abraço,<br>Equipe Contta</p>",
+  "cta": "Responda este e-mail ou agende: [link]",
+  "ps": "PS: Primeira consulta sem custo, sem compromisso."
+}
+
+### Exemplo 2: Follow-up
+Input:
+{
+  "type": "follow_up",
+  "recipient": {"name": "João Silva"},
+  "context": {"previous_interaction": "E-mail há 10 dias", "deal_value": 2500},
+  "tone": "casual"
+}
+
+Output:
+{
+  "subject": "João, ainda posso ajudar?",
+  "body": "<p>Oi João,</p><p>Enviei um e-mail há alguns dias sobre contabilidade para a sua empresa. Sei que a rotina é corrida!</p><p>Se ainda faz sentido conversar, estou à disposição. Caso contrário, sem problema — pode me avisar para não insistir 😊</p><p>Abraço,<br>Contta</p>",
+  "cta": "Responda 'sim' se quiser uma call rápida ou 'não' se não for o momento",
+  "ps": null
+}
+```
+
+---
+
+### 🔍 Agente 4: Insight Generator (Relatórios Automatizados)
+
+#### Função Principal
+Gerar dashboards, relatórios executivos, análises de tendências.
+
+#### Triggers Automáticos
+1. **Monthly Report** - Todo dia 1º do mês, 8h
+2. **Weekly Summary** - Segundas, 7h
+3. **On-Demand** - Quando usuário solicita via UI
+
+#### Prompt de Treinamento - Agente Insight Generator
+```markdown
+## IDENTIDADE
+Você é o Agente Insight Generator, analista de dados especializado em KPIs de vendas e contabilidade.
+
+## MISSÃO
+Transformar dados brutos em insights acionáveis através de relatórios HTML formatados.
+
+## INPUT
+{
+  "period": "2025-10-01 to 2025-10-31",
+  "data": {
+    "revenue": 150000,
+    "deals_won": 12,
+    "deals_lost": 3,
+    "avg_deal_value": 12500,
+    "conversion_rate": 0.80,
+    "churn_predictions": [...],
+    "top_performing_agent": "user_123"
+  }
+}
+
+## OUTPUT
+HTML com:
+1. **Executive Summary** (3-5 linhas)
+2. **Key Metrics** (cards visuais)
+3. **Trends** (comparação mês anterior)
+4. **Recommendations** (3-5 ações)
+5. **Risk Alerts** (se houver)
+
+## EXEMPLO
+(Ver implementação em `services/geminiService.ts → generateAutomatedReport`)
+```
+
+---
+
+### 🕵️ Agente 5: Audit Watchdog (Compliance Automático)
+
+#### Função Principal
+Monitorar logs de acesso, detectar padrões incomuns, gerar relatórios LGPD.
+
+#### Triggers Automáticos
+1. **Daily Scan** - 23h (analisa logs do dia)
+2. **Anomaly Detection** - Acesso fora de horário comercial
+3. **Monthly LGPD Report** - Dia 5 de cada mês
+
+#### Prompt de Treinamento - Agente Audit Watchdog
+```markdown
+## IDENTIDADE
+Você é o Agente Audit Watchdog, auditor automatizado de compliance e segurança.
+
+## MISSÃO
+Analisar logs de acesso e identificar:
+1. Padrões incomuns
+2. Potenciais vazamentos de dados
+3. Acessos não autorizados
+4. Violações de LGPD
+
+## INPUT
+{
+  "logs": [
+    {"timestamp": "2025-11-09T02:30:00", "user": "user_123", "action": "view_company", "ip": "192.168.1.1"},
+    {"timestamp": "2025-11-09T14:00:00", "user": "user_456", "action": "export_data", "ip": "10.0.0.5"}
+  ]
+}
+
+## OUTPUT
+{
+  "anomalies": [
+    {
+      "type": "OFF_HOURS_ACCESS",
+      "severity": "MEDIUM",
+      "description": "Usuário user_123 acessou dados às 2h30 da manhã",
+      "recommendation": "Verificar se foi acesso legítimo ou credenciais comprometidas"
+    }
+  ],
+  "summary": "2 acessos fora de horário, 1 exportação de dados em massa",
+  "compliance_status": "OK | WARNING | CRITICAL"
+}
+```
+
+---
+
+### 🌳 Agente 6: Genealogist (Mapeamento de Rede de Sócios)
+
+#### Função Principal
+Construir grafo de relacionamentos: sócio A → empresa B → sócio C → empresa D (até 4º grau).
+
+#### Workflow
+```typescript
+async function genealogistAgent(cnpj: string) {
+  const network = { nodes: [], edges: [] };
+
+  // 1. Buscar empresa raiz
+  const rootCompany = await cnpjaService.getCompany(cnpj);
+  network.nodes.push({ id: cnpj, type: 'company', label: rootCompany.razao_social });
+
+  // 2. Para cada sócio da empresa raiz
+  for (const socio of rootCompany.socios) {
+    network.nodes.push({ id: socio.cpf_cnpj, type: 'person', label: socio.nome });
+    network.edges.push({ from: socio.cpf_cnpj, to: cnpj, relationship: 'sócio' });
+
+    // 3. Buscar outras empresas deste sócio (2º grau)
+    const otherCompanies = await cnpjaService.findCompaniesBySocio(socio.cpf_cnpj);
+    
+    for (const company of otherCompanies) {
+      network.nodes.push({ id: company.cnpj, type: 'company', label: company.razao_social });
+      network.edges.push({ from: socio.cpf_cnpj, to: company.cnpj, relationship: 'sócio' });
+
+      // 4. Buscar sócios dessas empresas (3º grau)
+      const secondDegreeSocios = await cnpjaService.getSocios(company.cnpj);
+      
+      for (const s2 of secondDegreeSocios) {
+        if (!network.nodes.find(n => n.id === s2.cpf_cnpj)) {
+          network.nodes.push({ id: s2.cpf_cnpj, type: 'person', label: s2.nome });
+          network.edges.push({ from: s2.cpf_cnpj, to: company.cnpj, relationship: 'sócio' });
+
+          // 5. Buscar empresas dos sócios de 3º grau (4º grau)
+          const thirdDegreeCompanies = await cnpjaService.findCompaniesBySocio(s2.cpf_cnpj);
+          for (const c3 of thirdDegreeCompanies) {
+            network.nodes.push({ id: c3.cnpj, type: 'company', label: c3.razao_social });
+            network.edges.push({ from: s2.cpf_cnpj, to: c3.cnpj, relationship: 'sócio' });
+          }
+        }
+      }
+    }
+  }
+
+  // 6. Identificar parentes (mesmos sobrenomes, endereços)
+  await identifyRelatives(network);
+
+  // 7. Gerar insights com IA
+  const insights = await gemini.analyzeNetwork(network);
+
+  return { network, insights };
+}
+```
+
+#### Prompt de Treinamento - Agente Genealogist
+```markdown
+## IDENTIDADE
+Você é o Agente Genealogist, especialista em mapeamento de redes corporativas e familiares.
+
+## MISSÃO
+Analisar rede de relacionamentos e identificar:
+1. Clusters de empresas (mesmo grupo econômico)
+2. Parentes (sobrenomes, endereços compartilhados)
+3. Potencial de cross-sell
+4. Riscos de concentração
+
+## INPUT
+{
+  "network": {
+    "nodes": [
+      {"id": "12345678000190", "type": "company", "label": "Empresa A"},
+      {"id": "12345678912", "type": "person", "label": "João Silva"},
+      {"id": "98765432000110", "type": "company", "label": "Empresa B"}
+    ],
+    "edges": [
+      {"from": "12345678912", "to": "12345678000190", "relationship": "sócio"},
+      {"from": "12345678912", "to": "98765432000110", "relationship": "sócio"}
+    ]
+  }
+}
+
+## OUTPUT
+{
+  "clusters": [
+    {
+      "id": "cluster_1",
+      "companies": ["Empresa A", "Empresa B"],
+      "key_person": "João Silva",
+      "relationship_type": "same_shareholder"
+    }
+  ],
+  "relatives": [
+    {
+      "person1": "João Silva",
+      "person2": "Maria Silva",
+      "relationship": "likely_spouse",
+      "evidence": "Mesmo sobrenome + mesmo endereço"
+    }
+  ],
+  "cross_sell_opportunities": [
+    {
+      "target_company": "Empresa B",
+      "reason": "Sócio já é cliente via Empresa A",
+      "confidence": 0.9,
+      "estimated_value": 2500
+    }
+  ],
+  "risk_alerts": [
+    {
+      "type": "CONCENTRATION_RISK",
+      "description": "3 empresas do mesmo sócio. Se perder este cliente, perde R$ 7.500/mês",
+      "severity": "MEDIUM"
+    }
+  ]
+}
+```
+
+---
+
+### 🔄 Orquestração Central
+
+#### Orquestrador de Agentes
+```typescript
+class AIOrchestrator {
+  async route(task: Task) {
+    const { type, context } = task;
+
+    switch (type) {
+      case 'prospect':
+        return await this.prospectorAgent.run(context);
+      
+      case 'analyze':
+        return await this.analyzerAgent.run(context);
+      
+      case 'communicate':
+        // Decisão: Gemini ou ChatGPT?
+        if (context.tone === 'creative') {
+          return await this.chatgpt.generate(context);
+        } else {
+          return await this.gemini.generate(context);
+        }
+      
+      case 'complex_analysis':
+        // Consenso: rodar os dois e comparar
+        const [geminiResult, chatgptResult] = await Promise.all([
+          this.gemini.analyze(context),
+          this.chatgpt.analyze(context)
+        ]);
+        return this.mergeResults(geminiResult, chatgptResult);
+    }
+  }
+
+  mergeResults(r1, r2) {
+    // Se concordam, retornar
+    if (r1.conclusion === r2.conclusion) return r1;
+
+    // Se divergem, pedir consenso humano
+    return {
+      ...r1,
+      needs_human_review: true,
+      alternative_view: r2
+    };
+  }
+}
+```
+
+---
+
+### ⚙️ Configuração de APIs
+
+#### Gemini Setup
+```typescript
+// services/geminiService.ts
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+export const geminiModel = genAI.getGenerativeModel({
+  model: 'gemini-1.5-pro',
+  generationConfig: {
+    temperature: 0.4, // Mais conservador para análises
+    topP: 0.95,
+    topK: 40,
+    maxOutputTokens: 8192,
+  }
+});
+```
+
+#### ChatGPT Setup
+```typescript
+// services/chatgptService.ts
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!
+});
+
+export const chatgptModel = {
+  async generate(prompt: string, options = {}) {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 4096,
+    });
+
+    return response.choices[0].message.content;
+  }
+};
+```
+
+---
+
+### ✅ Critérios de Conclusão - Agentes IA
+- [ ] 6 agentes implementados e testados
+- [ ] Prompts de treinamento documentados
+- [ ] Orquestrador funcional (routing entre agentes)
+- [ ] APIs Gemini + ChatGPT configuradas
+- [ ] Testes de consenso (quando divergem) implementados
+- [ ] Logs de decisões de IA registrados
+- [ ] Pontos de aprovação humana definidos
+
+---
+
+## 5. Integração CNPJá - Inteligência de Dados
+
+**Objetivo**: Enriquecer leads com dados públicos completos, mapear rede de sócios até 4º grau, identificar oportunidades de cross-sell.
+
+### 📡 API CNPJá - Endpoints Principais
+
+#### 5.1 Busca de Empresa
+```typescript
+// services/cnpjaService.ts
+export async function getCompanyDetails(cnpj: string) {
+  const response = await fetch(`https://api.cnpja.com/companies/${cnpj}`, {
+    headers: {
+      'Authorization': `Bearer ${process.env.CNPJA_API_KEY}`
+    }
+  });
+
+  const data = await response.json();
+
+  return {
+    razao_social: data.name,
+    nome_fantasia: data.alias,
+    cnpj: data.tax_id,
+    cnae_principal: data.main_activity.code,
+    cnae_descricao: data.main_activity.description,
+    natureza_juridica: data.legal_nature,
+    porte: data.size,
+    capital_social: data.equity,
+    data_abertura: data.founded,
+    situacao: data.status.text,
+    endereco: {
+      logradouro: data.address.street,
+      numero: data.address.number,
+      complemento: data.address.details,
+      bairro: data.address.district,
+      cidade: data.address.city,
+      uf: data.address.state,
+      cep: data.address.zip,
+      pais: data.address.country
+    },
+    telefones: data.phones,
+    email: data.emails[0],
+    socios: data.members.map(m => ({
+      nome: m.person.name,
+      cpf_cnpj: m.person.tax_id,
+      tipo: m.person.type, // 'NATURAL' ou 'JURIDICA'
+      qualificacao: m.role.text,
+      participacao: m.equity_share,
+      data_entrada: m.since
+    })),
+    atividades_secundarias: data.sideActivities.map(a => ({
+      code: a.code,
+      description: a.description
+    }))
+  };
+}
+```
+
+#### 5.2 Busca de Empresas por Sócio
+```typescript
+export async function findCompaniesBySocio(cpfOrCnpj: string) {
+  const response = await fetch(`https://api.cnpja.com/office?members=${cpfOrCnpj}`, {
+    headers: { 'Authorization': `Bearer ${process.env.CNPJA_API_KEY}` }
+  });
+
+  const data = await response.json();
+  return data.companies; // Array de empresas
+}
+```
+
+#### 5.3 Busca Avançada por Filtros
+```typescript
+export async function searchCompanies(filters: {
+  cnae?: string;
+  uf?: string;
+  cidade?: string;
+  situacao?: 'ATIVA' | 'BAIXADA';
+  porte?: 'ME' | 'EPP' | 'MEDIA' | 'GRANDE';
+  createdAfter?: Date;
+  page?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  if (filters.cnae) params.append('activity', filters.cnae);
+  if (filters.uf) params.append('state', filters.uf);
+  if (filters.cidade) params.append('city', filters.cidade);
+  if (filters.situacao) params.append('status', filters.situacao);
+  if (filters.porte) params.append('size', filters.porte);
+  if (filters.createdAfter) params.append('founded_after', filters.createdAfter.toISOString());
+  if (filters.page) params.append('page', filters.page.toString());
+  if (filters.limit) params.append('limit', filters.limit.toString());
+
+  const response = await fetch(`https://api.cnpja.com/companies?${params}`, {
+    headers: { 'Authorization': `Bearer ${process.env.CNPJA_API_KEY}` }
+  });
+
+  return await response.json();
+}
+```
+
+---
+
+### 🕸️ Mapeamento de Rede até 4º Grau
+
+#### Algoritmo Completo
+```typescript
+interface NetworkNode {
+  id: string; // CNPJ ou CPF
+  type: 'company' | 'person';
+  label: string;
+  data: any;
+  degree: number; // 1-4
+}
+
+interface NetworkEdge {
+  from: string;
+  to: string;
+  relationship: 'socio' | 'parente' | 'mesmo_endereco';
+  strength: number; // 0-1
+}
+
+export async function buildNetworkGraph(rootCnpj: string): Promise<{
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+  insights: any;
+}> {
+  const visited = new Set<string>();
+  const nodes: NetworkNode[] = [];
+  const edges: NetworkEdge[] = [];
+
+  // 1º GRAU: Empresa raiz + seus sócios
+  const rootCompany = await getCompanyDetails(rootCnpj);
+  nodes.push({
+    id: rootCnpj,
+    type: 'company',
+    label: rootCompany.razao_social,
+    data: rootCompany,
+    degree: 1
+  });
+  visited.add(rootCnpj);
+
+  for (const socio of rootCompany.socios) {
+    if (!visited.has(socio.cpf_cnpj)) {
+      nodes.push({
+        id: socio.cpf_cnpj,
+        type: 'person',
+        label: socio.nome,
+        data: socio,
+        degree: 1
+      });
+      visited.add(socio.cpf_cnpj);
+    }
+
+    edges.push({
+      from: socio.cpf_cnpj,
+      to: rootCnpj,
+      relationship: 'socio',
+      strength: socio.participacao / 100
+    });
+
+    // 2º GRAU: Outras empresas deste sócio
+    const otherCompanies = await findCompaniesBySocio(socio.cpf_cnpj);
+    
+    for (const company of otherCompanies.slice(0, 10)) { // Limitar a 10 por sócio
+      if (!visited.has(company.cnpj) && company.cnpj !== rootCnpj) {
+        const companyDetails = await getCompanyDetails(company.cnpj);
+        nodes.push({
+          id: company.cnpj,
+          type: 'company',
+          label: company.razao_social,
+          data: companyDetails,
+          degree: 2
+        });
+        visited.add(company.cnpj);
+
+        edges.push({
+          from: socio.cpf_cnpj,
+          to: company.cnpj,
+          relationship: 'socio',
+          strength: 0.5 // Estimativa
+        });
+
+        // 3º GRAU: Sócios dessas empresas
+        for (const s2 of companyDetails.socios.slice(0, 5)) {
+          if (!visited.has(s2.cpf_cnpj)) {
+            nodes.push({
+              id: s2.cpf_cnpj,
+              type: 'person',
+              label: s2.nome,
+              data: s2,
+              degree: 3
+            });
+            visited.add(s2.cpf_cnpj);
+
+            edges.push({
+              from: s2.cpf_cnpj,
+              to: company.cnpj,
+              relationship: 'socio',
+              strength: s2.participacao / 100
+            });
+
+            // 4º GRAU: Empresas dos sócios de 3º grau
+            const fourthDegreeCompanies = await findCompaniesBySocio(s2.cpf_cnpj);
+            
+            for (const c4 of fourthDegreeCompanies.slice(0, 3)) {
+              if (!visited.has(c4.cnpj)) {
+                nodes.push({
+                  id: c4.cnpj,
+                  type: 'company',
+                  label: c4.razao_social,
+                  data: { razao_social: c4.razao_social, cnpj: c4.cnpj },
+                  degree: 4
+                });
+                visited.add(c4.cnpj);
+
+                edges.push({
+                  from: s2.cpf_cnpj,
+                  to: c4.cnpj,
+                  relationship: 'socio',
+                  strength: 0.3
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Identificar parentes (mesmo sobrenome + mesmo endereço)
+  await identifyRelatives(nodes, edges);
+
+  // Gerar insights com IA
+  const insights = await gemini.analyzeNetwork({ nodes, edges });
+
+  return { nodes, edges, insights };
+}
+
+async function identifyRelatives(nodes: NetworkNode[], edges: NetworkEdge[]) {
+  const people = nodes.filter(n => n.type === 'person');
+
+  for (let i = 0; i < people.length; i++) {
+    for (let j = i + 1; j < people.length; j++) {
+      const p1 = people[i];
+      const p2 = people[j];
+
+      // Mesmo sobrenome
+      const lastName1 = p1.label.split(' ').pop();
+      const lastName2 = p2.label.split(' ').pop();
+
+      if (lastName1 === lastName2 && lastName1) {
+        // Verificar se têm empresas em comum
+        const p1Companies = edges.filter(e => e.from === p1.id).map(e => e.to);
+        const p2Companies = edges.filter(e => e.from === p2.id).map(e => e.to);
+        const commonCompanies = p1Companies.filter(c => p2Companies.includes(c));
+
+        if (commonCompanies.length > 0) {
+          edges.push({
+            from: p1.id,
+            to: p2.id,
+            relationship: 'parente',
+            strength: 0.7 // Provável parente
+          });
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### 📊 Análise de Rede com IA
+
+#### Prompt para Análise de Grafo
+```markdown
+## IDENTIDADE
+Você é um analista de redes corporativas especializado em identificar oportunidades de negócio.
+
+## MISSÃO
+Analisar o grafo de relacionamentos e identificar:
+1. Clusters de empresas (grupos econômicos)
+2. Pessoas-chave (hubs com muitas conexões)
+3. Oportunidades de cross-sell
+4. Riscos de concentração
+5. Empresas órfãs (sem contador, potencial lead)
+
+## INPUT
+{
+  "nodes": [
+    {"id": "12345678000190", "type": "company", "label": "Empresa A", "degree": 1},
+    {"id": "12345678912", "type": "person", "label": "João Silva", "degree": 1},
+    ...
+  ],
+  "edges": [
+    {"from": "12345678912", "to": "12345678000190", "relationship": "socio", "strength": 0.8},
+    ...
+  ]
+}
+
+## OUTPUT
+{
+  "clusters": [...],
+  "key_people": [...],
+  "cross_sell": [...],
+  "risks": [...],
+  "orphan_companies": [...]
+}
+```
+
+---
+
+### 🔐 Cache Inteligente de Dados CNPJá
+
+Para economizar chamadas de API:
+
+```typescript
+// services/cnpjaCacheService.ts
+export async function getCachedCompany(cnpj: string) {
+  // 1. Buscar no Supabase primeiro
+  const { data } = await supabase
+    .from('empresas')
+    .select('*')
+    .eq('cnpj', cnpj)
+    .single();
+
+  // 2. Se encontrou E está atualizado (< 30 dias), retornar
+  if (data && isRecent(data.updated_at, 30)) {
+    return data;
+  }
+
+  // 3. Se não, buscar na API CNPJá
+  const freshData = await cnpjaService.getCompanyDetails(cnpj);
+
+  // 4. Salvar no Supabase
+  await supabase.from('empresas').upsert(freshData);
+
+  return freshData;
+}
+
+function isRecent(timestamp: string, days: number): boolean {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays < days;
+}
+```
+
+---
+
+### ✅ Critérios de Conclusão - CNPJá
+- [ ] API CNPJá integrada e testada
+- [ ] Endpoints de busca implementados
+- [ ] Algoritmo de rede até 4º grau funcional
+- [ ] Identificação de parentes implementada
+- [ ] Cache de dados configurado (30 dias)
+- [ ] Análise de grafo com IA funcionando
+- [ ] Visualização de rede no frontend (React Flow ou D3.js)
+
+---
+
+## 6. Proteção de Secrets & Segurança
+
+**Objetivo**: Garantir que nenhuma chave, token ou secret seja exposta em código ou logs.
+
+### 🔒 Estratégia de Proteção
+
+#### 6.1 Arquivo `.env.local` (Nunca Versionar)
+```bash
+# .env.local (NUNCA commitar)
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGc...
+SUPABASE_SERVICE_KEY=eyJhbGc... # SECRET - apenas backend
+GEMINI_API_KEY=AIzaSy...
+OPENAI_API_KEY=sk-proj-...
+CNPJA_API_KEY=your-cnpja-key-here
+MCP_ACTOR=dev@contta.com
+```
+
+#### 6.2 `.gitignore` Atualizado
+```gitignore
+# Secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Vercel
+.vercel
+.vercel.env
+
+# Logs sensíveis
+logs/*.log
+logs/audit-log.ndjson
+logs/audit-attachments.ndjson
+
+# Backups
+backups/
+*.backup
+*.sql.gz
+
+# Chaves privadas
+*.pem
+*.key
+*.p12
+```
+
+#### 6.3 Configuração Vercel (Produção)
+```bash
+# Adicionar secrets no Vercel Dashboard ou CLI
+vercel env add SUPABASE_SERVICE_KEY production
+vercel env add GEMINI_API_KEY production
+vercel env add OPENAI_API_KEY production
+vercel env add CNPJA_API_KEY production
+vercel env add MCP_ACTOR production
+
+# Verificar
+vercel env ls
+```
+
+#### 6.4 Validação de Secrets no Build
+```typescript
+// scripts/check-env.js
+const requiredVars = [
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_KEY',
+  'GEMINI_API_KEY',
+  'OPENAI_API_KEY',
+  'CNPJA_API_KEY'
+];
+
+for (const varName of requiredVars) {
+  if (!process.env[varName]) {
+    console.error(`❌ Variável ${varName} não configurada!`);
+    process.exit(1);
+  }
+}
+
+console.log('✅ Todas as variáveis de ambiente estão configuradas.');
+```
+
+Adicionar ao `package.json`:
+```json
+{
+  "scripts": {
+    "prebuild": "node scripts/check-env.js",
+    "build": "tsc && vite build"
+  }
+}
+```
+
+#### 6.5 Rotação de Chaves (Procedimento Trimestral)
+```markdown
+## Procedimento de Rotação de Secrets
+
+### Frequência: A cada 90 dias
+
+### Checklist:
+1. [ ] Gerar nova API key no Gemini Console
+2. [ ] Atualizar `GEMINI_API_KEY` no Vercel
+3. [ ] Revogar chave antiga após 7 dias
+4. [ ] Repetir para OpenAI
+5. [ ] Repetir para CNPJá
+6. [ ] Atualizar `SUPABASE_SERVICE_KEY` se necessário
+7. [ ] Registrar rotação no `logs/security-audit.md`
+8. [ ] Notificar time via Slack
+```
+
+#### 6.6 Auditoria de Acessos
+```typescript
+// api/_lib/auditLog.ts
+export async function logApiAccess(request: VercelRequest, user: any, action: string) {
+  const log = {
+    timestamp: new Date().toISOString(),
+    user_id: user.id,
+    user_email: user.email,
+    action: action,
+    ip: request.headers['x-forwarded-for'] || request.socket.remoteAddress,
+    user_agent: request.headers['user-agent'],
+    endpoint: request.url
+  };
+
+  await supabase.from('audit_logs').insert(log);
+}
+```
+
+Adicionar em TODAS as rotas:
+```typescript
+// Em api/deals.ts
+const user = await requireUser(request, supabase);
+await logApiAccess(request, user, 'view_deals');
+```
+
+#### 6.7 Proteção de Logs
+```typescript
+// Nunca logar secrets
+console.log('API Key:', process.env.GEMINI_API_KEY); // ❌ ERRADO
+
+// Mascarar secrets nos logs
+const maskedKey = process.env.GEMINI_API_KEY?.substring(0, 10) + '...';
+console.log('API Key (masked):', maskedKey); // ✅ CORRETO
+```
+
+#### 6.8 Validação de Input (Proteção contra Injection)
+```typescript
+// api/_lib/validation.ts
+import { z } from 'zod';
+
+export const cnpjSchema = z.string().regex(/^\d{14}$/);
+export const emailSchema = z.string().email();
+export const idSchema = z.string().uuid();
+
+export function validateCnpj(cnpj: string) {
+  const result = cnpjSchema.safeParse(cnpj);
+  if (!result.success) {
+    throw toHttpError(400, 'CNPJ inválido');
+  }
+  return result.data;
+}
+```
+
+Usar em TODAS as rotas:
+```typescript
+// Em api/cnpj-lookup.ts
+const cnpj = validateCnpj(request.query.cnpj as string);
+```
+
+---
+
+### 📋 Checklist de Segurança
+
+#### Antes do Deploy
+- [ ] `.env.local` NÃO está versionado
+- [ ] `.gitignore` inclui todos os secrets
+- [ ] Todas as variáveis configuradas no Vercel
+- [ ] Script de validação (`check-env.js`) rodando no prebuild
+- [ ] Logs não expõem secrets
+- [ ] Input de todas as rotas validado
+
+#### Após Deploy
+- [ ] Testar endpoints com tokens inválidos (devem retornar 401)
+- [ ] Verificar que logs de audit estão sendo criados
+- [ ] Confirmar que secrets não aparecem em logs do Vercel
+- [ ] Executar `npm audit` e corrigir vulnerabilidades
+
+#### Trimestral
+- [ ] Rotacionar GEMINI_API_KEY
+- [ ] Rotacionar OPENAI_API_KEY
+- [ ] Rotacionar CNPJA_API_KEY
+- [ ] Revisar logs de auditoria (acessos fora de horário)
+- [ ] Atualizar dependências (`npm update`)
+
+---
+
+### ✅ Critérios de Conclusão - Proteção de Secrets
+- [ ] Zero secrets versionados no Git
+- [ ] Validação de env vars no CI/CD
+- [ ] Auditoria de acessos implementada
+- [ ] Input validation em todas as rotas
+- [ ] Logs mascarados
+- [ ] Rotação de chaves documentada
+- [ ] Time treinado em boas práticas
+
+---
 - [ ] Verificar se já chama endpoint real ou retorna mock
 - [ ] Mapear para endpoint em `api/` correspondente
 - [ ] Identificar gaps (funções sem backend implementado)
