@@ -16,6 +16,12 @@ import type {
   UpsellOpportunity, 
   Deal 
 } from '../types.ts';
+import {
+  GeminiAPIError,
+  OutputValidationError,
+  generateCorrelationId,
+  formatErrorForLogging,
+} from '../utils/errors.ts';
 
 // ============================================================================
 // CONFIGURAÇÃO & INICIALIZAÇÃO
@@ -200,13 +206,14 @@ export async function analyzeChurnRiskV2(dealData: {
   suggested_action: string;
 }> {
   const startTime = Date.now();
+  const correlationId = generateCorrelationId();
   metrics.totalRequests++;
   
   // Cache key baseado em dados normalizados
   const cacheKey = `churn:${dealData.company_name}:${dealData.days_since_last_activity}:${dealData.task_completion_rate}`;
   const cached = getCached<any>(cacheKey);
   if (cached) {
-    console.log('[analyzeChurnRisk] Cache hit');
+    console.log('[analyzeChurnRisk] Cache hit', { correlationId });
     return cached;
   }
   
@@ -298,11 +305,18 @@ Calcule risk_score (0-100) baseado em:
     
   } catch (error) {
     const elapsed = Date.now() - startTime;
+    metrics.failedRequests++;
+    
+    const errorLog = formatErrorForLogging(error);
     console.error('[analyzeChurnRisk] Failed', {
+      ...errorLog,
       company: dealData.company_name,
-      error: error instanceof Error ? error.message : String(error),
       elapsed: `${elapsed}ms`,
+      correlationId,
     });
+    
+    // Log para monitoramento (integrar com Sentry aqui)
+    // Sentry.captureException(error, { tags: { correlationId } });
     
     // Fallback com heurística simples
     const fallbackScore = Math.min(
@@ -310,6 +324,11 @@ Calcule risk_score (0-100) baseado em:
       (dealData.days_since_last_activity > 60 ? 70 : 30) +
       (dealData.task_completion_rate < 0.3 ? 30 : 0)
     );
+    
+    console.warn('[analyzeChurnRisk] Using fallback heuristic', {
+      correlationId,
+      fallbackScore,
+    });
     
     return {
       risk_score: fallbackScore,
