@@ -1,31 +1,65 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { requireUser } from './_lib/auth.ts';
+
+const toHttpError = (status: number, message: string) =>
+  Object.assign(new Error(message), { status });
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.SUPABASE_SERVICE_KEY!,
 );
+
+const httpCorsHeaders = {
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Authorization, Content-Type, X-Requested-With, X-Api-Version',
+};
+
+const mapDealRecord = (deal: any) => ({
+  id: deal.id,
+  companyName: deal.company_name,
+  contactName: deal.contact_name ?? '',
+  contactEmail: deal.contact_email ?? '',
+  value: typeof deal.value === 'number' ? deal.value : Number(deal.value ?? 0),
+  probability: deal.probability ?? 0,
+  expectedCloseDate: deal.expected_close_date,
+  lastActivity: deal.last_activity,
+  stage: deal.stage,
+  health: deal.health_score
+    ? {
+        score: deal.health_score,
+        reasoning: deal.health_reasoning ?? '',
+        suggestedAction: deal.health_suggested_action ?? '',
+      }
+    : null,
+  createdAt: deal.created_at ?? null,
+});
 
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  // CORS headers
-  response.setHeader('Access-Control-Allow-Credentials', 'true');
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  response.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  Object.entries(httpCorsHeaders).forEach(([key, value]) => {
+    response.setHeader(key, value);
+  });
 
   if (request.method === 'OPTIONS') {
-    response.status(200).end();
+    response.status(204).end();
     return;
   }
 
   try {
+    await requireUser(request, supabase);
+
     if (request.method === 'GET') {
       const { data, error } = await supabase
         .from('deals')
-        .select(`
+        .select(
+          `
           *,
           empresas:empresa_cnpj (
             cnpj,
@@ -37,33 +71,20 @@ export default async function handler(
             name,
             email
           )
-        `)
+        `,
+        )
         .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
       }
 
-      // Transformar dados para o formato esperado pelo frontend
-      const deals = data?.map(deal => ({
-        id: deal.id,
-        companyName: deal.company_name,
-        contactName: deal.contact_name || '',
-        contactEmail: deal.contact_email || '',
-        value: parseFloat(deal.value),
-        probability: deal.probability || 0,
-        expectedCloseDate: deal.expected_close_date,
-        lastActivity: deal.last_activity,
-        stage: deal.stage,
-        health: deal.health_score ? {
-          score: deal.health_score,
-          reasoning: deal.health_reasoning || '',
-          suggestedAction: deal.health_suggested_action || ''
-        } : null
-      })) || [];
-
+      const deals = (data ?? []).map(mapDealRecord);
       response.status(200).json(deals);
-    } else if (request.method === 'POST') {
+      return;
+    }
+
+    if (request.method === 'POST') {
       const {
         companyName,
         contactName,
@@ -73,22 +94,28 @@ export default async function handler(
         stage,
         expectedCloseDate,
         empresaCnpj,
-        ownerId
-      } = request.body;
+        ownerId,
+      } = request.body ?? {};
+
+      if (!companyName || typeof companyName !== 'string') {
+        throw toHttpError(400, 'Campo companyName é obrigatório.');
+      }
+
+      const payload = {
+        company_name: companyName,
+        contact_name: contactName ?? null,
+        contact_email: contactEmail ?? null,
+        value,
+        probability: probability ?? 0,
+        stage,
+        expected_close_date: expectedCloseDate ?? null,
+        empresa_cnpj: empresaCnpj ?? null,
+        owner_id: ownerId ?? null,
+      };
 
       const { data, error } = await supabase
         .from('deals')
-        .insert({
-          company_name: companyName,
-          contact_name: contactName,
-          contact_email: contactEmail,
-          value,
-          probability: probability || 0,
-          stage,
-          expected_close_date: expectedCloseDate,
-          empresa_cnpj: empresaCnpj,
-          owner_id: ownerId
-        })
+        .insert(payload)
         .select()
         .single();
 
@@ -96,29 +123,97 @@ export default async function handler(
         throw error;
       }
 
-      response.status(201).json(data);
-    } else if (request.method === 'PATCH') {
-      const { id } = request.query;
-      const updates = request.body;
+      response.status(201).json(mapDealRecord(data));
+      return;
+    }
 
-      const { data, error } = await supabase
+    if (request.method === 'PATCH') {
+      const { id } = request.query;
+      if (!id || Array.isArray(id)) {
+        throw toHttpError(400, 'ID do negócio inválido.');
+      }
+
+      const updates = request.body ?? {};
+      const mappedUpdates: Record<string, unknown> = {};
+
+      if (updates.companyName !== undefined) {
+        mappedUpdates.company_name = updates.companyName;
+      }
+      if (updates.contactName !== undefined) {
+        mappedUpdates.contact_name = updates.contactName;
+      }
+      if (updates.contactEmail !== undefined) {
+        mappedUpdates.contact_email = updates.contactEmail;
+      }
+      if (updates.value !== undefined) {
+        mappedUpdates.value = updates.value;
+      }
+      if (updates.probability !== undefined) {
+        mappedUpdates.probability = updates.probability;
+      }
+      if (updates.stage !== undefined) {
+        mappedUpdates.stage = updates.stage;
+      }
+      if (updates.expectedCloseDate !== undefined) {
+        mappedUpdates.expected_close_date = updates.expectedCloseDate;
+      }
+      if (updates.empresaCnpj !== undefined) {
+        mappedUpdates.empresa_cnpj = updates.empresaCnpj;
+      }
+      if (updates.ownerId !== undefined) {
+        mappedUpdates.owner_id = updates.ownerId;
+      }
+      if (updates.health !== undefined) {
+        mappedUpdates.health_score = updates.health?.score ?? null;
+        mappedUpdates.health_reasoning = updates.health?.reasoning ?? null;
+        mappedUpdates.health_suggested_action = updates.health?.suggestedAction ?? null;
+      }
+
+      const { data, error, status } = await supabase
         .from('deals')
-        .update(updates)
+        .update(mappedUpdates)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
-        throw error;
+        throw status === 406 ? toHttpError(404, 'Negócio não encontrado.') : error;
       }
 
-      response.status(200).json(data);
-    } else {
-      response.status(405).json({ message: 'Method not allowed' });
+      if (!data) {
+        throw toHttpError(404, 'Negócio não encontrado.');
+      }
+
+      response.status(200).json(mapDealRecord(data));
+      return;
     }
-  } catch (error: any) {
+
+    if (request.method === 'DELETE') {
+      const { id } = request.query;
+      if (!id || Array.isArray(id)) {
+        throw toHttpError(400, 'ID do negócio inválido.');
+      }
+
+      const { error, status } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw status === 406 ? toHttpError(404, 'Negócio não encontrado.') : error;
+      }
+
+      response.status(204).end();
+      return;
+    }
+
+    response.status(405).json({ message: 'Method not allowed' });
+  } catch (rawError: any) {
+    const error = rawError ?? {};
+    const status = typeof error.status === 'number' ? error.status : 500;
+    const message = error.message || 'Internal server error';
     console.error('Error in deals API:', error);
-    response.status(500).json({ message: error.message || 'Internal server error' });
+    response.status(status).json({ message });
   }
 }
 

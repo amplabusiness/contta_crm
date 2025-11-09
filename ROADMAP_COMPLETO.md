@@ -248,12 +248,18 @@ vercel dev
 2. **Prospecção:** Buscar empresas por CNPJ
 3. **Negócios:** Criar um negócio de teste
 4. **Tarefas:** Criar uma tarefa de teste
+5. **Compliance:** Conferir painel de consentimento e logs reais
+6. **Indicações:** Validar status, suas indicações e empresas sugeridas
+7. **Relatórios IA:** Gerar relatório (rede, territorial ou performance) e confirmar download
 
 **✅ Checklist:**
 - [ ] Dashboard funcionando
 - [ ] Busca de CNPJ funcionando
 - [ ] Criação de negócios funcionando
 - [ ] Criação de tarefas funcionando
+- [ ] Painel de compliance respondendo
+- [ ] Programa de indicações retornando dados reais
+- [ ] Relatórios gerados com sucesso
 
 ---
 

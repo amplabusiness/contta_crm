@@ -159,6 +159,81 @@ WITH CHECK (auth.uid() = assignee_id);
 
 **Crie políticas semelhantes para `deals` e outras tabelas conforme a regra de negócio.**
 
+### Passo 4: Provisionar usuário mestre (Admin)
+
+Para administrar o CRM no Supabase, provisionamos um usuário mestre que recebe permissão `Admin` no metadata e credenciais definidas pelo time. Utilize o script `scripts/create-master-user.js`, que reaproveita as variáveis do projeto e faz upsert (atualiza se já existir).
+
+1. Defina a senha de forma temporária via variável de ambiente (no PowerShell, sessão atual):
+
+  ```powershell
+  $env:MASTER_USER_PASSWORD = '@Ampla123'
+  $env:MASTER_USER_EMAIL = 'sergio@amplabusiness.com.br'    # opcional, já é o padrão do script
+  $env:MASTER_USER_NAME = 'Sergio Carneiro Leao'            # opcional
+  $env:MASTER_USER_ROLE = 'Admin'                          # opcional
+  $env:MASTER_USER_ORG = 'Ampla Contabilidade'             # opcional
+  ```
+
+  > **Importante:** evite commitar senhas em arquivos. Use variáveis efêmeras ou o gerenciador de segredos da Vercel/Supabase.
+
+2. Execute o script:
+
+  ```bash
+  node scripts/create-master-user.js
+  ```
+
+  Ele validará a sessão com a `SUPABASE_SERVICE_KEY`, criará o usuário caso não exista ou atualizará senha e metadados se já houver registro.
+
+3. Verifique no painel do Supabase em `Authentication → Users` se o usuário está com `role = Admin` no metadata.
+
+### Passo 5: QA das políticas de segurança (RLS)
+
+Para garantir que as políticas RLS continuem válidas após alterações, execute o script de QA dedicado:
+
+```bash
+npm run qa:rls
+```
+
+O script `scripts/qa-rls.js` provisiona usuários de teste, cria fixtures de negócios/tarefas e valida:
+
+- Usuário padrão **não** consegue alterar registros pertencentes a terceiros.
+- Usuário padrão consegue editar seus próprios deals/tarefas/perfil.
+- Usuário Admin consegue operar sobre registros de outros usuários.
+
+Todos os dados criados são removidos ao final da execução. Ajuste as variáveis de ambiente (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `VITE_SUPABASE_ANON_KEY`) antes de rodar o QA localmente ou em pipelines.
+
+### Passo 6: Auditoria via MCP
+
+Após qualquer modificação em políticas RLS ou dados sensíveis, registre o evento usando o fluxo do Model Context Protocol descrito em `MCP_AUDITORIA.md`. O resumo do processo é:
+
+- Abrir uma sessão MCP (`npx mcp shell`).
+- Executar a alteração necessária.
+- Chamar `filesystem.appendFile` para gravar a entrada NDJSON em `logs/audit-log.ndjson` com `timestamp`, `actor`, `scope`, `action`, `description` e `metadata`.
+- Encerrar a sessão após confirmar a resposta `{"status":"ok"}` e manter os arquivos de log versionados.
+
+O documento `MCP_AUDITORIA.md` contém exemplos completos de comandos PowerShell e boas práticas de auditoria.
+
+### Passo 7: Seeds e dados de teste
+
+Para popular o ambiente com dados de demonstração, utilize o script `scripts/seed-demo-data.js`:
+
+```bash
+npm run seed:demo            # insere/atualiza empresas, negócios e tarefas [SEED]
+npm run seed:demo -- --dry-run  # apenas exibe as ações
+npm run seed:demo -- --reset    # remove registros previamente criados
+```
+
+Por padrão o script associa os registros ao usuário `sergio@amplabusiness.com.br`. Defina `SEED_OWNER_EMAIL` se desejar outro responsável. Certifique-se de ter criado esse usuário previamente (via `scripts/create-master-user.js`) para evitar falhas de FK. As empresas, deals e tarefas inseridos carregam o sufixo `[SEED]`, facilitando sua identificação e limpeza.
+
+### Passo 8: Execução local com `vercel dev`
+
+Com o projeto já `vercel link`ado e as variáveis sincronizadas, basta rodar:
+
+```bash
+npx vercel dev --yes
+```
+
+O CLI reutiliza as configurações exportadas e inicia o frontend + rotas serverless localmente (porta 3000 por padrão). Caso a porta esteja ocupada, o Vercel CLI informa e escolhe a próxima disponível (`--port 3001`, por exemplo). Encerre com `CTRL+C` e, se necessário, finalize processos residuais via `Stop-Process -Name node` (PowerShell) antes de reiniciar.
+
 ## 4. Backend com Vercel Serverless Functions
 
 As funções serverless são arquivos TypeScript/JavaScript que ficam em um diretório `/api` na raiz do seu projeto. A Vercel automaticamente os transforma em endpoints de API.
@@ -320,3 +395,286 @@ useEffect(() => {
 ```
 
 Com este guia, você tem um plano claro e detalhado para construir um backend robusto e moderno para o Contta CRM.
+
+## 6. Documentação dos Endpoints Existentes
+
+### `/api/prospects`
+
+- **Métodos**: `GET`, `POST`, `DELETE`, `OPTIONS`
+- **Autenticação**: feita via `SUPABASE_SERVICE_KEY`; rota assume execução em ambiente confiável (Vercel Functions) e expõe CORS liberado (`Access-Control-Allow-Origin: *`).
+- **Headers padrão**: Todas as respostas carregam os cabeçalhos definidos em `httpCorsHeaders`, garantindo suporte a clients browser e pré-flight.
+
+#### `GET /api/prospects`
+
+- **Descrição**: Lista empresas prospectadas com suporte a paginação, busca textual (`razao_social`, `nome_fantasia`, `cnpj`) ou filtro direto por CNPJ.
+- **Query Params**:
+  - `search` (opcional): string livre; caracteres `%` e `_` são sanitizados antes do `ilike` preventivo.
+  - `cnpj` (opcional): aceita CNPJ formatado ou somente dígitos; prevalece sobre `search`.
+  - `limit` (opcional): inteiro entre 1 e 100 (default 25).
+  - `offset` (opcional): inteiro >= 0 (default 0).
+- **Resposta 200**: `Array<Prospecto>`, cada item no formato normalizado por `mapEmpresaRecord`:
+
+```json
+{
+  "cnpj": "01234567000189",
+  "razao_social": "Empresa Exemplo LTDA",
+  "nome_fantasia": "Exemplo",
+  "situacao_cadastral": "Ativa",
+  "data_abertura": "2021-05-01",
+  "porte": "ME",
+  "endereco_principal": {
+    "logradouro": "Rua A",
+    "numero": "100",
+    "bairro": "Centro",
+    "cidade": "São Paulo",
+    "uf": "SP",
+    "cep": "01001000",
+    "latitude": -23.55052,
+    "longitude": -46.633308
+  },
+  "cnae_principal": {
+    "codigo": "6201500",
+    "descricao": "Desenvolvimento de softwares"
+  },
+  "quadro_socios": [
+    {
+      "nome_socio": "Fulano de Tal",
+      "cpf_parcial": "***123",
+      "qualificacao": "Sócio",
+      "percentual_capital": 50
+    }
+  ],
+  "telefones": ["11999998888"],
+  "emails": ["contato@exemplo.com"],
+  "documentos": []
+}
+```
+
+- **Headers adicionais**: `X-Total-Count` com a contagem total antes da paginação (exposta quando Supabase retorna `count`).
+- **Erros comuns**: retorna 500 em falhas do Supabase; 204 vazio quando não há registros.
+
+#### `POST /api/prospects`
+
+- **Descrição**: Cria ou atualiza uma empresa. O handler faz `upsert` com base no CNPJ e sincroniza a tabela de sócios (`socios`/`empresa_socios`).
+- **Payload obrigatório**:
+
+```json
+{
+  "cnpj": "01234567000189",
+  "razao_social": "Empresa Exemplo LTDA"
+}
+```
+
+- **Campos opcionais**: `nome_fantasia`, `situacao_cadastral`, `data_abertura`, `porte`, `endereco_principal` (logradouro, número, bairro, cidade, uf, cep, latitude, longitude), `cnae_principal` (código, descrição), `telefones`, `emails`, `documentos`, `quadro_socios` (lista com `nome_socio`, `cpf_parcial`, `qualificacao`, `percentual_capital`).
+- **Normalização interna**: CNPJ recebe `replace(/[^0-9]/g, '')`; campos não enviados viram `null` ou coleções vazias; latitude/longitude passam por `sanitizeNumber` para evitar `NaN`.
+- **Resposta 201**: corpo idêntico ao formato do `GET`, refletindo dados persistidos e, se sócios foram enviados, já inclui vínculos atualizados.
+- **Erros comuns**:
+  - `400`: ausência de `cnpj` ou `razao_social`.
+  - `500`: falhas ao persistir dados ou recuperar registro após `upsert`.
+
+#### `DELETE /api/prospects`
+
+- **Descrição**: Remove uma empresa pelo CNPJ e cascata os sócios via FK (`ON DELETE CASCADE` em `empresa_socios`).
+- **Query Param obrigatório**: `cnpj` (qualquer formato; é sanitizado para dígitos antes do delete).
+- **Resposta 204**: nenhuma carga útil quando a exclusão ocorre sem erros.
+- **Erros comuns**:
+  - `400`: ausência do parâmetro `cnpj`.
+  - `404`: Supabase retorna erro `406` quando não encontra o registro; o handler mapeia para mensagem "Empresa não encontrada.".
+  - `500`: falhas inesperadas do Supabase.
+
+#### `OPTIONS /api/prospects`
+
+- Implementado para responder pré-flight CORS com `204 No Content`.
+
+### `/api/deals`
+
+- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`
+- **Autenticação**: obrigatória; usa `requireUser` para validar token Supabase (Bearer em `Authorization` ou cookie `sb-access-token`).
+- **Headers padrão**: política CORS aberta e suporte a credenciais.
+
+#### `GET /api/deals`
+
+- **Descrição**: Lista negócios em ordem decrescente de criação, incluindo empresa relacionada (`empresas`) e dono (`profiles`), traduzidos por `mapDealRecord`.
+- **Resposta 200**: `Array<Deal>` com campos `id`, `companyName`, `contactName`, `contactEmail`, `value`, `probability`, `expectedCloseDate`, `lastActivity`, `stage` e bloco opcional `health` (`score`, `reasoning`, `suggestedAction`).
+- **Erros**: `401` ausência/expiração de token; `500` falhas Supabase.
+
+#### `POST /api/deals`
+
+- **Descrição**: Cria um negócio. Valida `companyName` como string.
+- **Payload** (campos opcionais nulos quando omitidos): `contactName`, `contactEmail`, `value`, `probability`, `stage`, `expectedCloseDate`, `empresaCnpj`, `ownerId`.
+- **Resposta 201**: registro recém-criado em formato `mapDealRecord`.
+- **Erros**: `400` ausência de `companyName`; `401` sem auth; `500` erro Supabase.
+
+#### `PATCH /api/deals?id=<uuid>`
+
+- **Descrição**: Atualiza campos pontuais; apenas propriedades presentes no corpo são mapeadas para colunas SQL.
+- **Campos aceitos**: `companyName`, `contactName`, `contactEmail`, `value`, `probability`, `stage`, `expectedCloseDate`, `empresaCnpj`, `ownerId`, `health` (objeto com `score`, `reasoning`, `suggestedAction`).
+- **Resposta 200**: negócio atualizado.
+- **Erros**: `400` ID ausente ou repetido; `404` negócio inexistente; `401` auth; `500` Supabase.
+
+#### `DELETE /api/deals?id=<uuid>`
+
+- **Descrição**: Remove negócio pelo `id` informado na query.
+- **Resposta 204** quando excluído com sucesso.
+- **Erros**: `400` ID inválido; `404` negócio não encontrado; `401` auth.
+
+### `/api/tasks`
+
+- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`
+- **Autenticação**: requerida via `requireUser`.
+- **Notas**: escreve o nome do negócio relacionado em `related_deal_name` para evitar joins no frontend.
+
+#### `GET /api/tasks`
+
+- **Descrição**: Lista tarefas, unindo negócio (`deals`) e responsável (`profiles`). Resultado normalizado por `mapTaskRecord`.
+- **Resposta 200**: `Array<Task>` com `id`, `title`, `dueDate`, `priority`, `status`, `description`, `relatedDealId`, `relatedDealName`, `googleCalendarEventId`, `createdAt`.
+
+#### `POST /api/tasks`
+
+- **Descrição**: Cria tarefa; `title` obrigatório.
+- **Payload**: `dueDate`, `priority`, `status`, `description`, `relatedDealId`, `assigneeId`, `googleCalendarEventId`. Se `relatedDealId` for enviado, o backend resolve o `relatedDealName` consultando `deals`.
+- **Resposta 201**: tarefa criada com mapeamento consistente ao `GET`.
+- **Erros**: `400` ausência de `title`; `401` auth; `500` falhas Supabase.
+
+#### `PATCH /api/tasks?id=<uuid>`
+
+- **Descrição**: Atualiza campos pontuais (mesma lógica de mapeamento condicional). Mudança de `relatedDealId` refaz o lookup do nome.
+- **Resposta 200**: tarefa atualizada.
+- **Erros**: `400` ID inválido; `404` sem correspondência; `401` auth.
+
+#### `DELETE /api/tasks?id=<uuid>`
+
+- **Descrição**: Remove tarefa pelo ID.
+- **Resposta 204** se sucesso.
+- **Erros**: `400` ID inválido; `404` registro ausente; `401` auth.
+
+### `/api/team`
+
+- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`
+- **Autenticação**: obrigatória; apenas perfis com `user_metadata.role === 'Admin'` podem criar/alterar/apagar membros.
+
+#### `GET /api/team`
+
+- **Descrição**: Retorna perfis da tabela `profiles` com colunas principais. Não exige papel Admin além da autenticação básica.
+- **Resposta 200**: `Array<Member>` com `id`, `name`, `email`, `role`, `status`, `lastLogin`, `emailUsageGB`.
+
+#### `POST /api/team`
+
+- **Descrição**: Cria perfil administrativo. Campos obrigatórios `name` e `email`.
+- **Payload**: aceita `role`, `status`, `emailUsageGB`, `lastLogin`.
+- **Resposta 201**: membro criado.
+- **Erros**: `400` faltando `name` ou `email`; `403` usuário autenticado sem papel Admin; `500` Supabase.
+
+#### `PATCH /api/team?id=<uuid>`
+
+- **Descrição**: Atualiza dados do membro. SOMENTE Admin.
+- **Campos aceitos**: `name`, `role`, `status`, `emailUsageGB`, `lastLogin`.
+- **Resposta 200**: membro atualizado.
+- **Erros**: `400` ID inválido; `404` inexistente; `403` permissão insuficiente.
+
+#### `DELETE /api/team?id=<uuid>`
+
+- **Descrição**: Remove perfil por ID. SOMENTE Admin.
+- **Resposta 204** em caso de sucesso.
+- **Erros**: `400` ID inválido; `404` registro inexistente; `403` permissão insuficiente.
+
+### `/api/dashboard-data`
+
+- **Métodos**: `GET`, `OPTIONS`
+- **Autenticação**: não exige token; rota é usada em dashboards públicos do app.
+- **Descrição**: Agrega dados de `deals` e `tasks` para compor cards, gráficos e atividades recentes do painel principal.
+- **Resposta 200**:
+  - `statCardsData`: lista com título/valor/variação (ex.: receita total formatada em BRL).
+  - `salesChartData`: séries mensais (`name`, `sales`, `revenue`).
+  - `dealStageData`: contagem por estágio com cor sugerida.
+  - `recentActivities`: últimas interações sintetizadas.
+  - `insightsHtml`: HTML opcional gerado pelo `generateAutomatedReport` do Gemini quando `GEMINI_API_KEY` está configurada (falhas não quebram a resposta, apenas logam warning).
+- **Erros**: `500` se consultas ao Supabase falharem.
+
+### `/api/analytics-data`
+
+- **Métodos**: `GET`, `OPTIONS`
+- **Autenticação**: pública (mesmo padrão do dashboard).
+- **Descrição**: Endpoint avançado de analytics com previsões de churn e oportunidades de upsell.
+- **Resposta 200**:
+  - `report`: título, resumo textual e `generatedAt`.
+  - `churnPredictions`: top 5 clientes `Closed Won` com `churnRisk`, `primaryReason`, `suggestedAction`.
+  - `upsellOpportunities`: top 5 potenciais upsell com `confidence` e `potentialValue` estimado.
+  - `salesData`, `dealData`: agregados semelhantes ao dashboard.
+  - `insightsHtml`: HTML opcional via Gemini.
+- **Erros**: `500` em falhas de leitura Supabase; erros Gemini apenas geram log.
+
+### `/api/compliance`
+
+- **Métodos**: `GET`, `OPTIONS`
+- **Autenticação**: pública.
+- **Descrição**: Consolida status de consentimento e logs de acesso (tarefas/deals) para fins de LGPD.
+- **Resposta 200**:
+  - `consentStatus`: total de usuários, quantos estão ativos (interpretação de consentimento) e texto padrão.
+  - `accessLogs`: até 60 eventos recentes com `id`, `user`, `action`, `target`, `timestamp` formatado para `pt-BR`.
+- **Erros**: `500` caso alguma consulta falhe.
+
+### `/api/indicacoes`
+
+- **Métodos**: `GET`, `OPTIONS`
+- **Autenticação**: pública.
+- **Descrição**: Endpoint multifuncional controlado por `section`.
+
+#### `GET /api/indicacoes?section=status`
+
+- **Comportamento**: padrão quando `section` ausente ou inválida. Calcula nível atual do programa de indicações usando dados da tabela `indicacoes` (convênios convertidos e recompensa total).
+- **Resposta 200**: objeto com `nivel`, `total_ganho`, `indicacoes_convertidas`, `meta_proximo_nivel`, `beneficio_atual`.
+
+#### `GET /api/indicacoes?section=minhas`
+
+- **Comportamento**: lista indicações registradas (`id`, `empresa_nome`, `status`, `data_indicacao`, `recompensa_ganha`).
+- **Resposta 200**: array ordenado desc por `data_indicacao`.
+
+#### `GET /api/indicacoes?section=sugestoes&cep=01001000`
+
+- **Comportamento**: retorna até 20 empresas ativas sugeridas, com cálculo opcional de distância usando BrasilAPI CEP. Inclui recompensa sugerida conforme porte.
+- **Resposta 200**: lista de empresas em formato `mapEmpresaRecord`, acrescida de `distancia_km` (quando CEP válido e empresas com lat/long) e `recompensa` estimada.
+- **Erros**: `500` falha Supabase; logs warn quando CEP não retorna coordenadas.
+
+### `/api/reports`
+
+- **Métodos**: `GET`, `OPTIONS`
+- **Autenticação**: pública.
+- **Param obrigatório**: `type` (`network`, `territorial`, `performance`); ausente equivale a `network`.
+
+#### `GET /api/reports?type=network`
+
+- **Descrição**: Monta mapa de vínculos entre sócios e empresas a partir de `empresa_socios`, agregando por CPF parcial.
+- **Resposta 200**: `{ "networkData": Array<{ socio_nome, vinculos[] }> }`, onde cada vínculo carrega `empresa_vinculada_cnpj`, `empresa_vinculada_nome`, `grau_vinculo` e `tipo_vinculo`.
+
+#### `GET /api/reports?type=territorial`
+
+- **Descrição**: Exporta empresas ativas com dados cadastrais completos para análise territorial.
+- **Resposta 200**: `{ "territorialData": Array<EmpresaResumida> }` seguindo formato `mapEmpresaRecord`.
+
+#### `GET /api/reports?type=performance`
+
+- **Descrição**: Reutiliza mesma lógica de gamificação do endpoint de indicações para gerar resumo de performance e listar indicações.
+- **Resposta 200**: `{ "performanceData": { status, indicacoes[] } }`.
+- **Erros**: `400` para tipos não reconhecidos; `500` falhas de leitura.
+
+### `/api/cnpj-lookup`
+
+- **Métodos**: `GET`, `POST`, `OPTIONS`
+- **Autenticação**: pública.
+- **Descrição geral**: Proxy que normaliza dados de CNPJ consultando BrasilAPI, ReceitaWS e, se configurado, CNPJA (`CNPJA_API_KEY`).
+
+#### `GET /api/cnpj-lookup?cnpj=<valor>`
+
+- **Comportamento**: verifica CNPJ em múltiplas fontes até encontrar resposta. Normaliza campos (`endereco_principal`, `cnae_principal`, `quadro_socios`).
+- **Resposta 200**: objeto compatível com `mapEmpresaRecord` (sem persistir).
+- **Erros**: `400` CNPJ ausente; `500` quando nenhuma API retorna dados.
+
+#### `POST /api/cnpj-lookup`
+
+- **Payload**: `{ "cnpjs": ["11222333000181", ...] }`
+- **Comportamento**: itera pelos CNPJs retornando lista `resultados` (sucesso) e `erros`, com delay de 1 segundo entre chamadas para mitigar rate limit.
+- **Resposta 200**: objeto com `total`, `sucessos`, `erros`, `resultados[]`, `erros[]`.
+- **Erros**: `400` lista inválida; `500` exceções não tratadas.
+
+

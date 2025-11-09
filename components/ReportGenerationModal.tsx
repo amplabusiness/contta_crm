@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 // FIX: Added file extensions to import paths.
 import { ReportType } from '../types.ts';
-import { fetchMockDataForReport } from '../services/apiService.ts';
+import { fetchReportData } from '../services/apiService.ts';
 import {
   generateNetworkReport,
   generateTerritorialReport,
@@ -111,7 +111,7 @@ const ReportGenerationModal: React.FC<ReportGenerationModalProps> = ({ onClose }
     
     try {
       setStatusMessage('Buscando dados relevantes...');
-      const data = await fetchMockDataForReport(reportType);
+      const data = await fetchReportData(reportType);
 
       setStatusMessage('IA está gerando a análise...');
       let reportHtml = '';
@@ -119,12 +119,21 @@ const ReportGenerationModal: React.FC<ReportGenerationModalProps> = ({ onClose }
 
       switch (reportType) {
         case 'network':
+          if (!data.networkData || data.networkData.length === 0) {
+            throw new Error('Nenhum vínculo societário encontrado para gerar o relatório.');
+          }
           reportHtml = await generateNetworkReport(data.networkData);
           break;
         case 'territorial':
+          if (!data.territorialData || data.territorialData.length === 0) {
+            throw new Error('Nenhuma empresa ativa encontrada para análise territorial.');
+          }
           reportHtml = await generateTerritorialReport(data.territorialData);
           break;
         case 'performance':
+          if (!data.performanceData) {
+            throw new Error('Dados de performance indisponíveis no momento.');
+          }
           reportHtml = await generatePerformanceReport(data.performanceData.status, data.performanceData.indicacoes);
           break;
       }

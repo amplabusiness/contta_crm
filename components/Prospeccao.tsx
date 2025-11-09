@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 // FIX: Added file extensions to import paths.
 import { fetchProspectCompanies } from '../services/apiService.ts';
 import { getCoordinatesForCep, calculateDistance } from '../services/geolocationService.ts';
@@ -16,6 +16,7 @@ const ESCRITORIO_CEP = '04551-010';
 
 const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
     const [empresas, setEmpresas] = useState<Empresa[]>([]);
+    const [totalEmpresas, setTotalEmpresas] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -27,52 +28,124 @@ const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
     const [inputCep, setInputCep] = useState(ESCRITORIO_CEP);
     const [cepError, setCepError] = useState<string | null>(null);
     const [loadingDistances, setLoadingDistances] = useState(false);
+    const [officeCoords, setOfficeCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+    const officeCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
+
+    const totalPages = useMemo(() => (
+        totalEmpresas > 0 ? Math.ceil(totalEmpresas / itemsPerPage) : 0
+    ), [totalEmpresas]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        const resolveOfficeCoordinates = async () => {
+            const coords = await getCoordinatesForCep(ESCRITORIO_CEP);
+            if (cancelled) {
+                return;
+            }
+
+            if (coords) {
+                setOfficeCoords(coords);
+                officeCoordsRef.current = coords;
+                setCepError(null);
+            } else {
+                console.warn('Could not get coordinates for the office CEP. Distance calculation will be skipped.');
+                setOfficeCoords(null);
+                officeCoordsRef.current = null;
+                setCepError('CEP do escritório inválido. Distâncias iniciais não calculadas.');
+            }
+        };
+
+        resolveOfficeCoordinates();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const controller = new AbortController();
+
         const loadProspects = async () => {
             try {
                 setLoading(true);
                 setError(null);
-                setCepError(null);
-                
-                const empresasData = await fetchProspectCompanies();
 
-                const escritorioCoords = await getCoordinatesForCep(ESCRITORIO_CEP);
-                if (!escritorioCoords) {
-                    console.warn("Could not get coordinates for the office CEP. Distance calculation will be skipped.");
-                    setCepError("CEP do escritório inválido. Distâncias iniciais não calculadas.");
-                }
+                const search = searchTerm.trim();
+                const offset = (currentPage - 1) * itemsPerPage;
+                const { data, total } = await fetchProspectCompanies({
+                    search: search.length > 0 ? search : undefined,
+                    limit: itemsPerPage,
+                    offset,
+                    signal: controller.signal,
+                });
+                const originCoords = officeCoordsRef.current;
 
                 const empresasComDados = await Promise.all(
-                    empresasData.map(async (empresa) => {
+                    data.map(async (empresa) => {
                         const newEmpresa = { ...empresa };
-                        const coords = await getCoordinatesForCep(empresa.endereco_principal.cep);
-                        if (coords) {
-                            newEmpresa.endereco_principal.latitude = coords.latitude;
-                            newEmpresa.endereco_principal.longitude = coords.longitude;
-                            if (escritorioCoords) {
-                                newEmpresa.distancia_km = calculateDistance(
-                                    escritorioCoords.latitude,
-                                    escritorioCoords.longitude,
-                                    coords.latitude,
-                                    coords.longitude
-                                );
+                        if (!cancelled) {
+                            const coords = await getCoordinatesForCep(empresa.endereco_principal.cep);
+                            if (coords) {
+                                newEmpresa.endereco_principal.latitude = coords.latitude;
+                                newEmpresa.endereco_principal.longitude = coords.longitude;
+                                if (originCoords) {
+                                    newEmpresa.distancia_km = calculateDistance(
+                                        originCoords.latitude,
+                                        originCoords.longitude,
+                                        coords.latitude,
+                                        coords.longitude,
+                                    );
+                                }
+                            } else {
+                                delete newEmpresa.distancia_km;
                             }
                         }
                         return newEmpresa;
-                    })
+                    }),
                 );
-                setEmpresas(empresasComDados);
 
+                if (!cancelled) {
+                    const totalPagesFromApi = total > 0 ? Math.ceil(total / itemsPerPage) : 0;
+
+                    if (totalPagesFromApi === 0 && currentPage !== 1) {
+                        setTotalEmpresas(total);
+                        setEmpresas(empresasComDados);
+                        setCurrentPage(1);
+                        return;
+                    }
+
+                    if (totalPagesFromApi > 0 && currentPage > totalPagesFromApi) {
+                        setTotalEmpresas(total);
+                        setEmpresas(empresasComDados);
+                        setCurrentPage(totalPagesFromApi);
+                        return;
+                    }
+
+                    setEmpresas(empresasComDados);
+                    setTotalEmpresas(total);
+                }
             } catch (err) {
-                setError("Falha ao carregar prospects. Verifique a conexão com o backend e tente recarregar a página.");
+                if (controller.signal.aborted || cancelled) {
+                    return;
+                }
+                setError('Falha ao carregar prospects. Verifique a conexão com o backend e tente recarregar a página.');
                 console.error(err);
             } finally {
-                setLoading(false);
+                if (!controller.signal.aborted && !cancelled) {
+                    setLoading(false);
+                }
             }
         };
+
         loadProspects();
-    }, []);
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
+    }, [currentPage, itemsPerPage, searchTerm]);
 
     const handleRecalculateDistances = useCallback(async () => {
         setLoadingDistances(true);
@@ -93,6 +166,8 @@ const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
             return;
         }
 
+    setOfficeCoords(newOriginCoords);
+    officeCoordsRef.current = newOriginCoords;
         setEmpresas(prevEmpresas =>
             prevEmpresas.map(empresa => {
                 if (empresa.endereco_principal.latitude && empresa.endereco_principal.longitude) {
@@ -116,30 +191,47 @@ const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
     }, [inputCep]);
 
 
-    const filteredAndSortedEmpresas = useMemo(() => {
-        return empresas
-            .filter(empresa =>
-                empresa.razao_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                empresa.nome_fantasia.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                empresa.cnpj.replace(/[^\d]/g, '').includes(searchTerm.replace(/[^\d]/g, ''))
-            )
-            .sort((a, b) => {
-                if (sortBy === 'distancia_km') {
-                    return (a.distancia_km ?? Infinity) - (b.distancia_km ?? Infinity);
-                }
-                return a.razao_social.localeCompare(b.razao_social);
-            });
-    }, [empresas, searchTerm, sortBy]);
+    const sortedEmpresas = useMemo(() => {
+        if (sortBy === 'distancia_km') {
+            return [...empresas].sort((a, b) => (a.distancia_km ?? Infinity) - (b.distancia_km ?? Infinity));
+        }
+        return empresas;
+    }, [empresas, sortBy]);
 
-    const totalPages = Math.ceil(filteredAndSortedEmpresas.length / itemsPerPage);
-    const paginatedEmpresas = filteredAndSortedEmpresas.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
-    
+    useEffect(() => {
+        if (!officeCoords) {
+            return;
+        }
+
+        setEmpresas(prevEmpresas =>
+            prevEmpresas.map(empresa => {
+                if (empresa.endereco_principal.latitude !== undefined && empresa.endereco_principal.longitude !== undefined) {
+                    return {
+                        ...empresa,
+                        distancia_km: calculateDistance(
+                            officeCoords.latitude,
+                            officeCoords.longitude,
+                            empresa.endereco_principal.latitude,
+                            empresa.endereco_principal.longitude,
+                        ),
+                    };
+                }
+                return empresa;
+            }),
+        );
+    }, [officeCoords]);
+
     const handlePageChange = useCallback((page: number) => {
-        setCurrentPage(page);
-    }, []);
+        setCurrentPage(prevPage => {
+            if (page < 1) {
+                return 1;
+            }
+            if (totalPages > 0 && page > totalPages) {
+                return totalPages;
+            }
+            return page;
+        });
+    }, [totalPages]);
 
     if (loading) {
         return (
@@ -210,12 +302,12 @@ const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                       {paginatedEmpresas.map(empresa => (
+                   {sortedEmpresas.map(empresa => (
                             <EmpresaCard key={empresa.cnpj} empresa={empresa} navigate={navigate} />
                        ))}
                     </div>
 
-                    {totalPages > 1 && (
+                {totalPages > 1 && (
                          <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
@@ -223,7 +315,7 @@ const Prospeccao: React.FC<ProspeccaoProps> = ({ navigate }) => {
                         />
                     )}
 
-                    {filteredAndSortedEmpresas.length === 0 && !loading && (
+                {sortedEmpresas.length === 0 && !loading && (
                         <div className="text-center p-12 text-gray-500 border-2 border-dashed border-gray-700 rounded-xl mt-6">
                              <h3 className="text-lg font-semibold text-gray-400">Nenhum resultado encontrado.</h3>
                              <p className="mt-1 text-sm">Tente ajustar seus filtros de busca.</p>

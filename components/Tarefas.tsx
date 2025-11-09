@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchTasks, updateTask } from '../services/apiService.ts';
+import { fetchTasks, updateTask, deleteTask } from '../services/apiService.ts';
 import { createCalendarEvent } from '../services/googleApiService.ts';
 import { Task, TaskStatus, GoogleCalendarEvent } from '../types.ts';
 import { TasksIcon, ClockIcon, SearchIcon, TrashIcon, CalendarIcon, CheckCircleIcon } from './icons/Icons.tsx';
@@ -25,15 +25,20 @@ const LoadingState: React.FC = () => (
     </div>
 );
 
-const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => void, onUpdate: (task: Task) => void; }> = ({ task, onDelete, onUpdate }) => {
-    const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'Concluída';
+const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => Promise<void>, onUpdate: (task: Task) => void; }> = ({ task, onDelete, onUpdate }) => {
+    const dueDateObj = task.dueDate ? new Date(task.dueDate) : null;
+    const isOverdue = dueDateObj ? dueDateObj < new Date() && task.status !== 'Concluída' : false;
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const handleSyncToCalendar = useCallback(async () => {
         setIsSyncing(true);
         setSyncError('');
         try {
+            if (!task.dueDate) {
+                throw new Error('Defina uma data de vencimento antes de sincronizar com a Agenda.');
+            }
             const event: GoogleCalendarEvent = {
                 summary: task.title,
                 description: `Tarefa do Contta CRM relacionada ao negócio: ${task.relatedDealName}. Detalhes: ${task.description || ''}`,
@@ -51,6 +56,16 @@ const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => void, onUpd
         }
     }, [task, onUpdate]);
 
+    const handleDelete = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        setIsDeleting(true);
+        try {
+            await onDelete(task.id);
+        } finally {
+            setIsDeleting(false);
+        }
+    }, [onDelete, task.id]);
+
     return (
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700/80 shadow-md group relative flex flex-col justify-between">
             <div>
@@ -61,8 +76,9 @@ const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => void, onUpd
                     </Tooltip>
                 </div>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-                    className="absolute top-3 right-3 p-1 rounded-full text-gray-500 hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className={`absolute top-3 right-3 p-1 rounded-full text-gray-500 hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ${isDeleting ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`}
                     aria-label="Excluir tarefa"
                 >
                     <TrashIcon className="w-4 h-4" />
@@ -74,7 +90,7 @@ const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => void, onUpd
             <div className="mt-3 pt-3 border-t border-gray-700/50 space-y-3">
                 <div className={`text-xs flex items-center ${isOverdue ? 'text-red-400 font-bold' : 'text-gray-400'}`}>
                     <ClockIcon className="w-4 h-4 mr-2"/>
-                    <span>Vencimento: {new Date(task.dueDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
+                    <span>Vencimento: {dueDateObj ? dueDateObj.toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Sem data definida'}</span>
                 </div>
                 <div>
                     {task.googleCalendarEventId ? (
@@ -103,6 +119,7 @@ const Tarefas: React.FC = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -111,6 +128,7 @@ const Tarefas: React.FC = () => {
                 setLoading(true);
                 const tasksData = await fetchTasks();
                 setTasks(tasksData);
+                setError(null);
             } catch (err) {
                 setError('Falha ao carregar as tarefas. Tente recarregar a página.');
                 console.error(err);
@@ -121,9 +139,16 @@ const Tarefas: React.FC = () => {
         loadTasks();
     }, []);
     
-    const handleDeleteTask = (taskId: string) => {
-        setTasks(currentTasks => currentTasks.filter(task => task.id !== taskId));
-    };
+    const handleDeleteTask = useCallback(async (taskId: string) => {
+        try {
+            setActionError(null);
+            await deleteTask(taskId);
+            setTasks(currentTasks => currentTasks.filter(task => task.id !== taskId));
+        } catch (err) {
+            console.error('Falha ao excluir a tarefa', err);
+            setActionError('Falha ao excluir a tarefa. Tente novamente.');
+        }
+    }, []);
     
     const handleUpdateTask = (updatedTask: Task) => {
         setTasks(currentTasks => currentTasks.map(task => task.id === updatedTask.id ? updatedTask : task));
@@ -149,6 +174,12 @@ const Tarefas: React.FC = () => {
                     Organize suas atividades e nunca perca um prazo.
                 </p>
             </div>
+
+            {actionError && (
+                <div className="text-sm text-red-300 bg-red-900/40 border border-red-500/40 rounded-lg px-4 py-2">
+                    {actionError}
+                </div>
+            )}
             
             <div className="mb-4">
                 <div className="relative">
@@ -177,7 +208,11 @@ const Tarefas: React.FC = () => {
                         <div className="p-2 space-y-3 overflow-y-auto flex-1 bg-gray-800/20 rounded-b-lg">
                            {filteredTasks
                                 .filter(t => t.status === status)
-                                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                                .sort((a, b) => {
+                                    const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+                                    const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+                                    return dateA - dateB;
+                                })
                                 .map(task => (
                                     <TaskCard key={task.id} task={task} onDelete={handleDeleteTask} onUpdate={handleUpdateTask} />
                                 ))

@@ -8,9 +8,13 @@ import { getIntelligentSearchParams } from '../services/geminiService.ts';
 import { executeGlobalSearch } from '../services/apiService.ts';
 
 interface HeaderProps {
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
-  navigate: (view: View, payload?: any) => void;
+    sidebarOpen: boolean;
+    setSidebarOpen: (open: boolean) => void;
+    navigate: (view: View, payload?: any) => void;
+    userName: string;
+    userEmail: string;
+    organization: string;
+    onSignOut: () => Promise<void> | void;
 }
 
 const SearchResultItem: React.FC<{ item: GlobalSearchResultItem; icon: React.FC<any>; onClick: () => void }> = ({ item, icon: Icon, onClick }) => (
@@ -26,29 +30,43 @@ const SearchResultItem: React.FC<{ item: GlobalSearchResultItem; icon: React.FC<
 );
 
 
-const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }) => {
+const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate, userName, userEmail, organization, onSignOut }) => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<GlobalSearchResults | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const debounceTimeout = useRef<number | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const latestSearchIdRef = useRef(0);
 
     const handleSearch = useCallback(async (query: string) => {
-        if (!query.trim()) {
+        const normalizedQuery = query.trim();
+        const requestId = latestSearchIdRef.current + 1;
+        latestSearchIdRef.current = requestId;
+
+        if (!normalizedQuery) {
             setSearchResults(null);
             setIsSearching(false);
             return;
         }
+
         setIsSearching(true);
         try {
-            const searchParams = await getIntelligentSearchParams(query);
+            const searchParams = await getIntelligentSearchParams(normalizedQuery);
             const results = await executeGlobalSearch(searchParams);
-            setSearchResults(results);
+
+            if (latestSearchIdRef.current === requestId) {
+                setSearchResults(results);
+            }
         } catch (error) {
             console.error("Global search failed:", error);
+            if (latestSearchIdRef.current === requestId) {
+                setSearchResults(null);
+            }
         } finally {
-            setIsSearching(false);
+            if (latestSearchIdRef.current === requestId) {
+                setIsSearching(false);
+            }
         }
     }, []);
 
@@ -59,6 +77,12 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }
         debounceTimeout.current = window.setTimeout(() => {
             handleSearch(searchQuery);
         }, 500); // 500ms debounce
+
+        return () => {
+            if (debounceTimeout.current) {
+                clearTimeout(debounceTimeout.current);
+            }
+        };
     }, [searchQuery, handleSearch]);
 
     useEffect(() => {
@@ -86,6 +110,8 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }
     
     const totalResults = searchResults ? searchResults.clients.length + searchResults.deals.length + searchResults.tasks.length : 0;
 
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=4f46e5&color=fff&bold=true`;
+
     return (
         <>
             <header className="flex-shrink-0 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50 z-10">
@@ -94,6 +120,7 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }
                         <button
                             onClick={() => setSidebarOpen(!sidebarOpen)}
                             className="p-2 -ml-2 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white lg:hidden"
+                            aria-label={sidebarOpen ? 'Fechar menu lateral' : 'Abrir menu lateral'}
                         >
                             <MenuIcon className="h-6 w-6" />
                         </button>
@@ -105,21 +132,31 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }
                         </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        <button className="relative p-2 text-gray-400 hover:text-white rounded-full hover:bg-gray-700/50">
+                                                <button
+                                                    className="relative p-2 text-gray-400 hover:text-white rounded-full hover:bg-gray-700/50"
+                                                    aria-label="Ver notificações"
+                                                >
                             <BellIcon className="w-6 h-6" />
                             <span className="absolute top-2 right-2 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-gray-900"></span>
                         </button>
                         <div className="flex items-center space-x-3">
                             <img
-                            src="https://ui-avatars.com/api/?name=Sergio+Leao&background=4f46e5&color=fff&bold=true"
-                            alt="User"
+                            src={avatarUrl}
+                            alt={userName}
                             className="w-10 h-10 rounded-full border-2 border-gray-600"
                             />
                             <div>
-                            <div className="font-semibold text-white">Sergio Carneiro Leao</div>
-                            <div className="text-xs text-gray-400">Proprietário | Ampla Contabilidade</div>
+                            <div className="font-semibold text-white">{userName}</div>
+                            <div className="text-xs text-gray-400">{organization}</div>
+                            <div className="text-[10px] text-gray-500">{userEmail}</div>
                             </div>
                         </div>
+                        <button
+                          onClick={() => onSignOut()}
+                          className="px-3 py-2 text-xs font-semibold text-gray-300 border border-gray-700 rounded-md hover:bg-gray-800 hover:text-white transition"
+                        >
+                          Sair
+                        </button>
                     </div>
                 </div>
             </header>
@@ -140,7 +177,7 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate }
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-transparent text-white placeholder-gray-500 focus:outline-none"
                             />
-                            <button onClick={closeSearch} className="p-1 text-gray-500 hover:text-white"><XIcon className="w-5 h-5"/></button>
+                            <button onClick={closeSearch} className="p-1 text-gray-500 hover:text-white" aria-label="Fechar busca"><XIcon className="w-5 h-5"/></button>
                         </div>
                         <div className="p-4 max-h-[60vh] overflow-y-auto">
                             {isSearching ? (

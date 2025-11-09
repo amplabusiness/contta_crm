@@ -20,19 +20,15 @@ import {
 // FIX: Added file extension to import path
 import { View } from '../App.tsx';
 // FIX: Added file extension to import path
-import { TeamMember } from '../types.ts';
 
 interface SidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   currentView: View;
   navigate: (view: View) => void;
-  // Simulating user context for role-based visibility
-  user?: TeamMember; 
+  userName: string;
+  userRole: string;
 }
-
-// Hardcoded user for role simulation
-const loggedInUser: TeamMember = { id: 'user-8', name: 'Sergio Carneiro Leao', email: 'sergio@amplabusiness.com.br', role: 'Admin', status: 'Ativo', lastLogin: '', emailUsageGB: 0 };
 
 
 const mainNavItems: { view: View; icon: React.FC<{ className?: string }>; label: string }[] = [
@@ -84,7 +80,7 @@ const NavLink: React.FC<{
     );
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, currentView, navigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, currentView, navigate, userName, userRole }) => {
   return (
     <>
       {/* Mobile overlay */}
@@ -102,9 +98,15 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, currentV
         } lg:relative lg:translate-x-0 lg:flex-shrink-0`}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-center h-16 flex-shrink-0 px-4 border-b border-gray-700/50">
-            <SparkleIcon className="w-8 h-8 text-indigo-400" />
-            <span className="ml-2 text-xl font-bold text-white">Contta CRM</span>
+          <div className="flex items-center justify-between h-16 flex-shrink-0 px-4 border-b border-gray-700/50">
+            <div className="flex items-center">
+              <SparkleIcon className="w-8 h-8 text-indigo-400" />
+              <span className="ml-2 text-xl font-bold text-white">Contta CRM</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-white truncate">{userName}</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide">{userRole}</p>
+            </div>
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
             {mainNavItems.map((item) => (
@@ -116,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, currentV
                 ))}
             </div>
 
-             {loggedInUser.role === 'Admin' && (
+             {userRole?.toLowerCase() === 'admin' && (
                 <div className="pt-4 mt-4 space-y-1 border-t border-gray-700/50">
                     <p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase">Admin</p>
                     {adminNavItems.map((item) => (

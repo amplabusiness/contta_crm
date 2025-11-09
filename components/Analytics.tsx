@@ -47,21 +47,38 @@ const UpsellCard: React.FC<{ opportunity: UpsellOpportunity }> = ({ opportunity 
 
 
 const Analytics: React.FC = () => {
+    const escapeHtml = (value: string) =>
+        value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
     const [report, setReport] = useState<AutomatedReport | null>(null);
     const [churn, setChurn] = useState<ChurnPrediction[]>([]);
     const [upsell, setUpsell] = useState<UpsellOpportunity[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
             try {
                 setLoading(true);
-                const { report, churnPredictions, upsellOpportunities } = await fetchAnalyticsData();
-                setReport(report);
+                const { report: apiReport, churnPredictions, upsellOpportunities, insightsHtml } = await fetchAnalyticsData();
+                setReport(apiReport);
                 setChurn(churnPredictions);
                 setUpsell(upsellOpportunities);
+
+                if (typeof insightsHtml === 'string' && insightsHtml.trim().length > 0) {
+                    setReportHtml(insightsHtml);
+                } else if (apiReport?.summary) {
+                    setReportHtml(`<p>${escapeHtml(apiReport.summary)}</p>`);
+                } else {
+                    setReportHtml(null);
+                }
             } catch (err) {
                 setError('Falha ao gerar o relatório de análises.');
                 console.error(err);
@@ -113,7 +130,7 @@ const Analytics: React.FC = () => {
                         )}
                         <div 
                             className="p-6 prose prose-invert prose-sm max-w-none text-gray-300"
-                            dangerouslySetInnerHTML={{ __html: report?.summary || '<p>Não foi possível carregar o conteúdo do relatório.</p>' }}
+                            dangerouslySetInnerHTML={{ __html: reportHtml || '<p>Não foi possível carregar o conteúdo do relatório.</p>' }}
                         />
                     </div>
 

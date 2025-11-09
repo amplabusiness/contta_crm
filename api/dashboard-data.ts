@@ -1,23 +1,116 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { generateAutomatedReport } from '../services/geminiService.ts';
+
+const toHttpError = (status: number, message: string) =>
+  Object.assign(new Error(message), { status });
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.SUPABASE_SERVICE_KEY!,
 );
+
+const httpCorsHeaders = {
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Authorization, Content-Type, X-Requested-With, X-Api-Version',
+};
+
+const ensureNumber = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCurrencyBRL = (value: number): string =>
+  value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+  });
+
+const buildSalesTimeline = (deals: any[], months = 6) => {
+  const now = new Date();
+  const rangeStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+
+  const timeline: Record<string, { sales: number; revenue: number }> = {};
+
+  deals.forEach((deal) => {
+    const createdAt = deal.created_at ? new Date(deal.created_at) : undefined;
+    if (!createdAt || Number.isNaN(createdAt.getTime()) || createdAt < rangeStart) {
+      try {
+        const [dealsResult, tasksResult] = await Promise.all([
+    timeline[key].sales += 1;
+    if (deal.stage === 'Closed Won') {
+      timeline[key].revenue += ensureNumber(deal.value);
+    }
+  });
+
+  return Object.entries(timeline)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => ({
+      name: new Date(`${key}-01T00:00:00Z`).toLocaleDateString('pt-BR', {
+        year: 'numeric',
+      }),
+      sales: value.sales,
+      revenue: value.revenue,
+    }));
+};
+
+const buildDealStageData = (deals: any[]) => {
+  const stages: { name: string; color: string }[] = [
+    { name: 'Prospecting', color: '#3b82f6' },
+    { name: 'Qualification', color: '#8b5cf6' },
+    { name: 'Proposal', color: '#f59e0b' },
+    { name: 'Negotiation', color: '#ef4444' },
+    { name: 'Closed Won', color: '#10b981' },
+    { name: 'Closed Lost', color: '#6b7280' },
+  ];
+
+  return stages.map(({ name, color }) => ({
+    name,
+    color,
+    value: deals.filter((deal) => deal.stage === name).length,
+  }));
+};
+
+const buildRecentActivities = (deals: any[], tasks: any[], limit = 10) => {
+  const activities = [
+    ...tasks.map((task) => ({
+      id: `task-${task.id}`,
+      user: { name: 'Sistema', avatar: '' },
+      action: 'Tarefa atualizada',
+      target: task.title ?? 'Tarefa',
+      timestamp: task.created_at ?? new Date().toISOString(),
+    })),
+    ...deals.map((deal) => ({
+      id: `deal-${deal.id}`,
+      user: { name: 'Sistema', avatar: '' },
+      action: `Negócio ${deal.stage ?? 'Atualizado'}`,
+      target: deal.company_name ?? 'Negócio',
+      timestamp: deal.created_at ?? new Date().toISOString(),
+    })),
+  ]
+    .filter((entry) => Boolean(entry.timestamp))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  return activities.slice(0, limit);
+};
 
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  // CORS headers
-  response.setHeader('Access-Control-Allow-Credentials', 'true');
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  Object.entries(httpCorsHeaders).forEach(([key, value]) => {
+    response.setHeader(key, value);
+  });
 
   if (request.method === 'OPTIONS') {
-    response.status(200).end();
+    response.status(204).end();
     return;
   }
 
@@ -27,126 +120,112 @@ export default async function handler(
   }
 
   try {
-    // Buscar dados agregados
-    const [dealsResult, tasksResult, empresasResult] = await Promise.all([
-      supabase.from('deals').select('id, value, stage, created_at'),
-      supabase.from('tasks').select('id, title, status, priority, created_at'),
-      supabase.from('empresas').select('cnpj').limit(1)
+    const [dealsResult, tasksResult] = await Promise.all([
+      supabase
+        .from('deals')
+        .select('id, company_name, value, stage, probability, expected_close_date, last_activity, created_at')
+        .order('created_at', { ascending: false })
+        .limit(400),
+      supabase
+        .from('tasks')
+        .select('id, title, status, priority, due_date, created_at, related_deal_name')
+        .order('created_at', { ascending: false })
+        .limit(400),
     ]);
 
-    const deals = dealsResult.data || [];
-    const tasks = tasksResult.data || [];
+    if (dealsResult.error) {
+      throw dealsResult.error;
+    }
+    if (tasksResult.error) {
+      throw tasksResult.error;
+    }
 
-    // Calcular estatísticas
-    const totalRevenue = deals
-      .filter(d => d.stage === 'Closed Won')
-      .reduce((sum, d) => sum + parseFloat(d.value), 0);
+    const deals = dealsResult.data ?? [];
+    const tasks = tasksResult.data ?? [];
 
+    const closedWonDeals = deals.filter((deal) => deal.stage === 'Closed Won');
+    const totalRevenue = closedWonDeals.reduce(
+      (acc, deal) => acc + ensureNumber(deal.value),
+      0,
+    );
     const totalDeals = deals.length;
-    const activeDeals = deals.filter(d => 
-      !['Closed Won', 'Closed Lost'].includes(d.stage)
+    const activeDeals = deals.filter(
+      (deal) => !['Closed Won', 'Closed Lost'].includes(deal.stage ?? ''),
     ).length;
-
-    const pendingTasks = tasks.filter(t => t.status === 'A Fazer').length;
+    const pendingTasks = tasks.filter((task) => task.status === 'A Fazer').length;
     const totalTasks = tasks.length;
 
-    // Calcular dados do gráfico de vendas (últimos 6 meses)
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
-    const recentDeals = deals.filter(d => 
-      new Date(d.created_at) >= sixMonthsAgo
-    );
+    const conversionRate = totalDeals > 0
+      ? Math.round((closedWonDeals.length / totalDeals) * 100)
+      : 0;
 
-    // Agrupar por mês
-    const salesByMonth: Record<string, { sales: number; revenue: number }> = {};
-    recentDeals.forEach(deal => {
-      const date = new Date(deal.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!salesByMonth[monthKey]) {
-        salesByMonth[monthKey] = { sales: 0, revenue: 0 };
-      }
-      salesByMonth[monthKey].sales += 1;
-      if (deal.stage === 'Closed Won') {
-        salesByMonth[monthKey].revenue += parseFloat(deal.value);
-      }
-    });
-
-    const salesChartData = Object.entries(salesByMonth)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, data]) => ({
-        name: new Date(name + '-01').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-        sales: data.sales,
-        revenue: data.revenue
-      }));
-
-    // Dados de estágios de negócios
-    const dealStageData = [
-      { name: 'Prospecting', value: deals.filter(d => d.stage === 'Prospecting').length, color: '#3b82f6' },
-      { name: 'Qualification', value: deals.filter(d => d.stage === 'Qualification').length, color: '#8b5cf6' },
-      { name: 'Proposal', value: deals.filter(d => d.stage === 'Proposal').length, color: '#f59e0b' },
-      { name: 'Negotiation', value: deals.filter(d => d.stage === 'Negotiation').length, color: '#ef4444' },
-      { name: 'Closed Won', value: deals.filter(d => d.stage === 'Closed Won').length, color: '#10b981' },
-      { name: 'Closed Lost', value: deals.filter(d => d.stage === 'Closed Lost').length, color: '#6b7280' }
-    ];
-
-    // Atividades recentes (últimas 10 tarefas e negócios)
-    const recentActivities = [
-      ...tasks.slice(0, 5).map(t => ({
-        id: `task-${t.id}`,
-        user: { name: 'Sistema', avatar: '' },
-        action: 'Tarefa criada',
-        target: t.title,
-        timestamp: t.created_at
-      })),
-      ...deals.slice(0, 5).map(d => ({
-        id: `deal-${d.id}`,
-        user: { name: 'Sistema', avatar: '' },
-        action: 'Negócio atualizado',
-        target: `Negócio ${d.stage}`,
-        timestamp: d.created_at
-      }))
-    ]
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 10);
-
-    // Stat Cards
     const statCardsData = [
       {
         title: 'Receita Total',
-        value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-        change: '+12.5%',
-        changeType: 'increase' as const
+        value: formatCurrencyBRL(totalRevenue),
+        change: '+0%',
+        changeType: 'increase' as const,
       },
       {
         title: 'Negócios Ativos',
-        value: activeDeals.toString(),
-        change: '+5',
-        changeType: 'increase' as const
+        value: String(activeDeals),
+        change: '+0',
+        changeType: 'increase' as const,
       },
       {
         title: 'Tarefas Pendentes',
-        value: pendingTasks.toString(),
-        change: '-3',
-        changeType: 'decrease' as const
+        value: String(pendingTasks),
+        change: '+0',
+        changeType: 'decrease' as const,
       },
       {
         title: 'Taxa de Conversão',
-        value: totalDeals > 0 ? `${Math.round((deals.filter(d => d.stage === 'Closed Won').length / totalDeals) * 100)}%` : '0%',
-        change: '+2.1%',
-        changeType: 'increase' as const
-      }
+        value: `${conversionRate}%`,
+        change: '+0%',
+        changeType: 'increase' as const,
+      },
     ];
+
+    const salesChartData = buildSalesTimeline(deals);
+    const dealStageData = buildDealStageData(deals);
+    const recentActivities = buildRecentActivities(deals.slice(0, 20), tasks.slice(0, 20));
+
+    let insightsHtml: string | null = null;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (geminiKey) {
+      if (!process.env.API_KEY) {
+        process.env.API_KEY = geminiKey;
+      }
+      try {
+        insightsHtml = await generateAutomatedReport({
+          statCardsData,
+          salesChartData,
+          dealStageData,
+          totals: {
+            totalDeals,
+            totalRevenue,
+            totalTasks,
+            pendingTasks,
+          },
+        });
+      } catch (geminiError: any) {
+        console.warn('Falha ao gerar insights com Gemini:', geminiError?.message ?? geminiError);
+      }
+    }
 
     response.status(200).json({
       statCardsData,
       salesChartData,
       dealStageData,
-      recentActivities
+      recentActivities,
+      insightsHtml,
     });
-  } catch (error: any) {
+  } catch (rawError: any) {
+    const error = rawError ?? {};
+    const status = typeof error.status === 'number' ? error.status : 500;
+    const message = error.message || 'Internal server error';
     console.error('Error in dashboard-data API:', error);
-    response.status(500).json({ message: error.message || 'Internal server error' });
+    response.status(status).json({ message });
   }
 }
 
