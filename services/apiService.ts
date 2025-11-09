@@ -3,7 +3,7 @@ import {
     ChurnPrediction, UpsellOpportunity, AutomatedReport, ConsentStatus, DataAccessLog,
     ProgramaIndicacoesStatus, Indicacao, EmpresaParaIndicar, Deal, Task, TaskStatus, TeamMember, UserRole, CompanyActivity,
     GlobalSearchResults
-} from './types.ts';
+} from '../types';
 import {
     mockStatCardsData, mockSalesChartData, mockDealStageData, mockRecentActivities, mockProspectsCnpjs,
     mockChurnPredictions, mockUpsellOpportunities, mockAutomatedReport, mockConsentStatus, mockDataAccessLogs,

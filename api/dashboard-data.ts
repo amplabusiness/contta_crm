@@ -29,8 +29,8 @@ export default async function handler(
   try {
     // Buscar dados agregados
     const [dealsResult, tasksResult, empresasResult] = await Promise.all([
-      supabase.from('deals').select('value, stage, created_at'),
-      supabase.from('tasks').select('status, priority, created_at'),
+      supabase.from('deals').select('id, value, stage, created_at'),
+      supabase.from('tasks').select('id, title, status, priority, created_at'),
       supabase.from('empresas').select('cnpj').limit(1)
     ]);
 

@@ -196,7 +196,7 @@ export default async function handler(
       response.status(200).json({
         total: cnpjs.length,
         sucessos: resultados.length,
-        erros: erros.length,
+        totalErros: erros.length,
         resultados,
         erros
       });
