@@ -12,6 +12,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { analyzeUpsellOpportunityV2 } from '../services/geminiService.v2.ts';
+import { rateLimit, getClientIp, rateLimitHeaders, RATE_LIMITS } from '../utils/rateLimit.ts';
+import { RateLimitError } from '../utils/errors.ts';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -32,6 +34,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 🛡️ RATE LIMITING
+    const clientIp = getClientIp(req.headers);
+    const rateLimitInfo = await rateLimit(
+      `ip:${clientIp}`,
+      RATE_LIMITS.AI_ANALYSIS
+    );
+    
+    // Adicionar headers de rate limit
+    Object.entries(rateLimitHeaders(rateLimitInfo)).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+    
+    console.log('[analytics-upsell] Rate limit check passed', {
+      ip: clientIp,
+      remaining: rateLimitInfo.remaining,
+    });
     // 1. Buscar deals "Closed Won" (clientes ativos)
     const { data: deals, error: dealsError } = await supabase
       .from('deals')
@@ -91,6 +109,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(upsellOpportunities.slice(0, 10));
 
   } catch (error: any) {
+    // Tratar erro de rate limit separadamente
+    if (error instanceof RateLimitError) {
+      Object.entries(rateLimitHeaders({
+        limit: error.context.limit,
+        remaining: 0,
+        reset: Date.now() + (error.retryAfter * 1000),
+        retryAfter: error.retryAfter,
+      })).forEach(([key, value]) => {
+        res.setHeader(key, value);
+      });
+      
+      return res.status(429).json({
+        error: 'Rate limit exceeded',
+        message: error.message,
+        retryAfter: error.retryAfter,
+      });
+    }
+    
     console.error('Erro ao gerar oportunidades de upsell:', error);
     return res.status(500).json({
       error: 'Erro ao gerar análise de upsell',

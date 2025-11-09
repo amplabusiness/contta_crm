@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:ai": "tsx scripts/test-ai-services.js",
     "test:ai:v2": "tsx scripts/test-gemini-optimizations.js",
+    "test:ratelimit": "tsx scripts/test-rate-limiting.js",
     "qa:supabase": "node scripts/qa-queries.js",
     "qa:rls": "node scripts/qa-rls.js",
     "seed:demo": "node scripts/seed-demo-data.js"
