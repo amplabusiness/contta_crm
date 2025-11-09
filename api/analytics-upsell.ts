@@ -11,7 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { analyzeUpsellOpportunity } from '../services/geminiService.ts';
+import { analyzeUpsellOpportunityV2 } from '../services/geminiService.v2.ts';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -62,8 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         companyData = empresa;
       }
 
-      // Analisar oportunidade com Gemini AI
-      const analysis = await analyzeUpsellOpportunity({
+      // Analisar oportunidade com Gemini AI V2 (otimizada)
+      const analysis = await analyzeUpsellOpportunityV2({
         company_name: deal.company_name,
         current_value: deal.value,
         deal_stage: deal.stage,

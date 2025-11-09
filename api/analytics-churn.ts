@@ -11,7 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { analyzeChurnRisk } from '../services/geminiService.ts';
+import { analyzeChurnRiskV2 } from '../services/geminiService.v2.ts';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -72,8 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const totalTasks = tasks?.length || 0;
       const taskCompletionRate = totalTasks > 0 ? completedTasks / totalTasks : 0;
 
-      // 3. Usar Gemini AI para analisar risco de churn
-      const analysis = await analyzeChurnRisk({
+      // 3. Usar Gemini AI V2 (otimizada) para analisar risco de churn
+      const analysis = await analyzeChurnRiskV2({
         company_name: deal.company_name,
         deal_value: deal.value,
         days_since_last_activity: daysSinceLastActivity,

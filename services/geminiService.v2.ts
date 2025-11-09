@@ -143,15 +143,25 @@ function validateChurnOutput(output: any): output is {
  * Valida output de upsell prediction
  */
 function validateUpsellOutput(output: any): output is {
-  opportunity_type: string;
+  opportunity_type: 'Upsell' | 'Cross-sell' | 'Retention';
   product_suggestion: string;
   confidence: number;
   potential_value: number;
 } {
+  const validTypes = ['upsell', 'cross-sell', 'retention'];
+  const normalizedType = output.opportunity_type?.toLowerCase();
+  
+  if (!validTypes.includes(normalizedType)) {
+    return false;
+  }
+  
+  // Normalizar para capitalized
+  if (normalizedType === 'upsell') output.opportunity_type = 'Upsell';
+  else if (normalizedType === 'cross-sell') output.opportunity_type = 'Cross-sell';
+  else if (normalizedType === 'retention') output.opportunity_type = 'Retention';
+  
   return (
     typeof output === 'object' &&
-    typeof output.opportunity_type === 'string' &&
-    ['upsell', 'cross-sell', 'retention'].includes(output.opportunity_type.toLowerCase()) &&
     typeof output.product_suggestion === 'string' &&
     output.product_suggestion.length > 0 &&
     typeof output.confidence === 'number' &&
@@ -417,7 +427,7 @@ ${JSON.stringify(dealData, null, 2)}
     
     // Fallback heurístico
     return {
-      opportunity_type: 'Cross-sell',
+      opportunity_type: 'Cross-sell' as const,
       product_suggestion: 'Folha de Pagamento - Automatize gestão de RH',
       confidence: 50,
       potential_value: Math.max(500, dealData.current_value * 0.3),
