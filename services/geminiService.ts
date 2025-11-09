@@ -5,7 +5,7 @@ import {
     ParentePotencial, VinculoAnalysis, Deal, DealHealth, DataAccessLog, 
     RedeDeVinculos, ProgramaIndicacoesStatus, Indicacao, Socio
 // FIX: Added Socio to the import list.
-} from './types.ts';
+} from '../types';
 
 // Initialize the Gemini client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
