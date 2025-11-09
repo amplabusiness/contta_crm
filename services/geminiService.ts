@@ -8,7 +8,11 @@ import {
 } from '../types.ts';
 
 // Initialize the Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+if (!apiKey) {
+  throw new Error('GEMINI_API_KEY não configurado em .env.local');
+}
+const ai = new GoogleGenAI({ apiKey });
 const model = "gemini-2.5-flash";
 
 const safelyParseJson = <T>(jsonString: string): T | null => {
