@@ -22,6 +22,7 @@ import {
   generateCorrelationId,
   formatErrorForLogging,
 } from '../utils/errors.ts';
+import { cache as redisCache, buildCacheKey, cacheAside } from '../utils/cache.ts';
 
 // ============================================================================
 // CONFIGURAÇÃO & INICIALIZAÇÃO
@@ -35,14 +36,10 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey });
 const model = "gemini-2.5-flash";
 
-// Cache em memória (simples - substituir por Redis em produção)
-const cache = new Map<string, { data: any; expiresAt: number }>();
-
-// Métricas de performance
+// Métricas de performance (agora cache é gerenciado por utils/cache.ts)
 const metrics = {
   totalRequests: 0,
   failedRequests: 0,
-  cacheHits: 0,
   avgResponseTime: 0,
 };
 
@@ -100,29 +97,6 @@ async function retryWithBackoff<T>(
   
   metrics.failedRequests++;
   throw lastError || new Error('Max retries exceeded');
-}
-
-/**
- * Cache helper com TTL
- */
-function getCached<T>(key: string): T | null {
-  const cached = cache.get(key);
-  if (!cached) return null;
-  
-  if (Date.now() > cached.expiresAt) {
-    cache.delete(key);
-    return null;
-  }
-  
-  metrics.cacheHits++;
-  return cached.data as T;
-}
-
-function setCache<T>(key: string, data: T, ttlSeconds = 300): void {
-  cache.set(key, {
-    data,
-    expiresAt: Date.now() + ttlSeconds * 1000,
-  });
 }
 
 /**
@@ -209,15 +183,19 @@ export async function analyzeChurnRiskV2(dealData: {
   const correlationId = generateCorrelationId();
   metrics.totalRequests++;
   
-  // Cache key baseado em dados normalizados
-  const cacheKey = `churn:${dealData.company_name}:${dealData.days_since_last_activity}:${dealData.task_completion_rate}`;
-  const cached = getCached<any>(cacheKey);
-  if (cached) {
-    console.log('[analyzeChurnRisk] Cache hit', { correlationId });
-    return cached;
-  }
+  // Build cache key com namespace
+  const cacheKey = buildCacheKey(
+    'churn',
+    dealData.company_name,
+    dealData.days_since_last_activity,
+    Math.round(dealData.task_completion_rate * 100)
+  );
   
-  const prompt = `
+  // Use cache-aside pattern com Redis (ou fallback memória)
+  return cacheAside(
+    cacheKey,
+    async () => {
+      const prompt = `
 # SISTEMA DE PREDIÇÃO DE CHURN B2B
 
 ## CONTEXTO
@@ -266,76 +244,74 @@ Calcule risk_score (0-100) baseado em:
 **IMPORTANTE**: Retorne APENAS o JSON, sem explicações adicionais.
   `.trim();
   
-  try {
-    const result = await retryWithBackoff(async () => {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: { 
-          responseMimeType: 'application/json',
-          temperature: 0.3, // Baixa variação para consistência
-        }
-      });
-      
-      const parsed = safelyParseJson<any>(response.text);
-      if (!parsed) {
-        throw new Error('JSON parse failed');
+      try {
+        const result = await retryWithBackoff(async () => {
+          const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: { 
+              responseMimeType: 'application/json',
+              temperature: 0.3,
+            }
+          });
+          
+          const parsed = safelyParseJson<any>(response.text);
+          if (!parsed) {
+            throw new Error('JSON parse failed');
+          }
+          
+          if (!validateChurnOutput(parsed)) {
+            throw new Error(`Invalid output structure: ${JSON.stringify(parsed)}`);
+          }
+          
+          return parsed;
+        });
+        
+        const elapsed = Date.now() - startTime;
+        metrics.avgResponseTime = (metrics.avgResponseTime + elapsed) / 2;
+        
+        console.log('[analyzeChurnRisk] Success', {
+          company: dealData.company_name,
+          riskScore: result.risk_score,
+          elapsed: `${elapsed}ms`,
+          correlationId,
+        });
+        
+        return result;
+        
+      } catch (error) {
+        const elapsed = Date.now() - startTime;
+        metrics.failedRequests++;
+        
+        const errorLog = formatErrorForLogging(error);
+        console.error('[analyzeChurnRisk] Failed', {
+          ...errorLog,
+          company: dealData.company_name,
+          elapsed: `${elapsed}ms`,
+          correlationId,
+        });
+        
+        // Fallback heurístico
+        const fallbackScore = Math.min(
+          100,
+          (dealData.days_since_last_activity > 60 ? 70 : 30) +
+          (dealData.task_completion_rate < 0.3 ? 30 : 0)
+        );
+        
+        console.warn('[analyzeChurnRisk] Using fallback heuristic', {
+          correlationId,
+          fallbackScore,
+        });
+        
+        return {
+          risk_score: fallbackScore,
+          primary_reason: 'Análise baseada em heurística (IA indisponível)',
+          suggested_action: 'Agendar reunião de reativação imediatamente',
+        };
       }
-      
-      if (!validateChurnOutput(parsed)) {
-        throw new Error(`Invalid output structure: ${JSON.stringify(parsed)}`);
-      }
-      
-      return parsed;
-    });
-    
-    // Cache por 5 minutos
-    setCache(cacheKey, result, 300);
-    
-    const elapsed = Date.now() - startTime;
-    metrics.avgResponseTime = (metrics.avgResponseTime + elapsed) / 2;
-    
-    console.log('[analyzeChurnRisk] Success', {
-      company: dealData.company_name,
-      riskScore: result.risk_score,
-      elapsed: `${elapsed}ms`,
-    });
-    
-    return result;
-    
-  } catch (error) {
-    const elapsed = Date.now() - startTime;
-    metrics.failedRequests++;
-    
-    const errorLog = formatErrorForLogging(error);
-    console.error('[analyzeChurnRisk] Failed', {
-      ...errorLog,
-      company: dealData.company_name,
-      elapsed: `${elapsed}ms`,
-      correlationId,
-    });
-    
-    // Log para monitoramento (integrar com Sentry aqui)
-    // Sentry.captureException(error, { tags: { correlationId } });
-    
-    // Fallback com heurística simples
-    const fallbackScore = Math.min(
-      100,
-      (dealData.days_since_last_activity > 60 ? 70 : 30) +
-      (dealData.task_completion_rate < 0.3 ? 30 : 0)
-    );
-    
-    console.warn('[analyzeChurnRisk] Using fallback heuristic', {
-      correlationId,
-      fallbackScore,
-    });
-    
-    return {
-      risk_score: fallbackScore,
-      primary_reason: 'Análise baseada em heurística (IA indisponível)',
-      suggested_action: 'Agendar reunião de reativação imediatamente',
-    };
-  }
+    },
+    300 // TTL 5 minutos
+  );
 }
 
 /**
@@ -355,15 +331,22 @@ export async function analyzeUpsellOpportunityV2(dealData: {
   potential_value: number;
 }> {
   const startTime = Date.now();
+  const correlationId = generateCorrelationId();
   metrics.totalRequests++;
   
-  const cacheKey = `upsell:${dealData.company_name}:${dealData.current_value}:${dealData.company_size}`;
-  const cached = getCached<any>(cacheKey);
-  if (cached) {
-    return cached;
-  }
+  // Build cache key
+  const cacheKey = buildCacheKey(
+    'upsell',
+    dealData.company_name,
+    dealData.current_value,
+    dealData.company_size || 'unknown'
+  );
   
-  const prompt = `
+  // Use cache-aside pattern
+  return cacheAside(
+    cacheKey,
+    async () => {
+      const prompt = `
 # SISTEMA DE IDENTIFICAÇÃO DE OPORTUNIDADES DE EXPANSÃO
 
 ## CONTEXTO
@@ -427,21 +410,22 @@ ${JSON.stringify(dealData, null, 2)}
       return parsed;
     });
     
-    setCache(cacheKey, result, 600); // 10min cache
-    
     const elapsed = Date.now() - startTime;
     console.log('[analyzeUpsell] Success', {
       company: dealData.company_name,
       confidence: result.confidence,
       elapsed: `${elapsed}ms`,
+      correlationId,
     });
     
     return result;
     
   } catch (error) {
+    const errorLog = formatErrorForLogging(error);
     console.error('[analyzeUpsell] Failed', {
+      ...errorLog,
       company: dealData.company_name,
-      error: error instanceof Error ? error.message : String(error),
+      correlationId,
     });
     
     // Fallback heurístico
@@ -452,25 +436,28 @@ ${JSON.stringify(dealData, null, 2)}
       potential_value: Math.max(500, dealData.current_value * 0.3),
     };
   }
+    },
+    600 // TTL 10 minutos
+  );
 }
 
 /**
  * Retorna métricas de performance do serviço
  */
 export function getGeminiMetrics() {
+  const cacheMetrics = redisCache.getMetrics();
+  
   return {
     ...metrics,
-    cacheSize: cache.size,
-    cacheHitRate: metrics.totalRequests > 0 
-      ? (metrics.cacheHits / metrics.totalRequests * 100).toFixed(2) + '%'
-      : '0%',
+    cache: cacheMetrics,
+    avgResponseTime: Math.round(metrics.avgResponseTime),
   };
 }
 
 /**
  * Limpa cache manualmente
  */
-export function clearCache() {
-  cache.clear();
+export async function clearCache() {
+  await redisCache.clear();
   console.log('[geminiService] Cache cleared');
 }
