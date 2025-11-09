@@ -4,9 +4,6 @@ import {
     ProgramaIndicacoesStatus, Indicacao, EmpresaParaIndicar, Deal, Task, TaskStatus, TeamMember, UserRole, CompanyActivity,
     GlobalSearchResults
 } from '../types.ts';
-import {
-    mockChurnPredictions, mockUpsellOpportunities, mockAutomatedReport
-} from '../data/mockData.ts';
 import { supabase } from './supabaseClient.ts';
 
 const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -122,18 +119,26 @@ export interface AnalyticsDataResult {
 }
 
 export const fetchAnalyticsData = async (): Promise<AnalyticsDataResult> => {
-    const response = await authorizedFetch('/api/analytics-data');
-    if (!response.ok) {
+    // Buscar dados REAIS dos 3 novos endpoints
+    const [reportRes, churnRes, upsellRes] = await Promise.all([
+        authorizedFetch('/api/analytics-report?days=30'),
+        authorizedFetch('/api/analytics-churn'),
+        authorizedFetch('/api/analytics-upsell'),
+    ]);
+
+    if (!reportRes.ok || !churnRes.ok || !upsellRes.ok) {
         throw new Error('Falha ao buscar dados analíticos da API.');
     }
 
-    const payload = await response.json();
+    const report = await reportRes.json() as AutomatedReport;
+    const churnPredictions = await churnRes.json() as ChurnPrediction[];
+    const upsellOpportunities = await upsellRes.json() as UpsellOpportunity[];
 
     return {
-        report: payload.report ?? mockAutomatedReport,
-        churnPredictions: payload.churnPredictions ?? mockChurnPredictions,
-        upsellOpportunities: payload.upsellOpportunities ?? mockUpsellOpportunities,
-        insightsHtml: payload.insightsHtml ?? null,
+        report,
+        churnPredictions,
+        upsellOpportunities,
+        insightsHtml: null, // Deprecated - dados agora vêm dos agentes IA
     };
 };
 

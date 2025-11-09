@@ -1,5 +1,5 @@
 import React from 'react';
-import { BriefcaseIcon, UserIcon, LinkIcon } from './icons/Icons';
+import { BriefcaseIcon, UserIcon, LinkIcon } from './icons/Icons.tsx';
 
 interface NetworkNodeProps {
   type: 'empresa' | 'socio' | 'parente';

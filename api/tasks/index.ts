@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireUser } from '../_lib/auth.ts';
-import { mapTaskRecordToResponse } from '../utils/formatters';
+import { mapTaskRecordToResponse } from '../utils/formatters.ts';
 
 const toHttpError = (status: number, message: string) =>
   Object.assign(new Error(message), { status });

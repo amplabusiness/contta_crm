@@ -54,6 +54,12 @@ export interface Socio {
     percentual_capital: number;
 }
 
+/**
+ * Business logic interface for Empresa
+ * Note: This uses nested objects (endereco_principal, cnae_principal, quadro_socios)
+ * The database uses individual fields - see types-db.ts for EmpresaDB
+ * Use mappers.ts to transform between database and business types
+ */
 export interface Empresa {
     cnpj: string;
     razao_social: string;
@@ -68,6 +74,7 @@ export interface Empresa {
     emails: string[];
     documentos: any[];
     distancia_km?: number;
+    createdAt?: string;  // Timestamp from empresas table
 }
 
 export type DealStage = 'Prospecting' | 'Qualification' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost';
@@ -83,6 +90,8 @@ export interface Deal {
   lastActivity: string;
   stage: DealStage;
   health: DealHealth | null;
+  empresaCnpj?: string | null;  // Foreign key to empresas table
+  ownerId?: string | null;       // Foreign key to profiles table
   createdAt?: string | null;
 }
 
@@ -99,6 +108,7 @@ export interface Task {
   createdAt: string;
   description?: string;
   googleCalendarEventId?: string;
+  assigneeId?: string | null;  // Foreign key to profiles table
 }
 
 export type UserRole = 'Admin' | 'User';
@@ -111,6 +121,7 @@ export interface TeamMember {
   status: 'Ativo' | 'Inativo';
   lastLogin: string;
   emailUsageGB: number;
+  createdAt?: string;  // Timestamp from profiles table
 }
 
 export interface ChurnPrediction {
@@ -164,6 +175,8 @@ export interface Indicacao {
     status: 'Convertido' | 'Em negociação' | 'Rejeitado';
     data_indicacao: string;
     recompensa_ganha?: number;
+    indicadorId?: string | null;   // Foreign key to profiles table
+    empresaCnpj?: string | null;   // Foreign key to empresas table
 }
 
 export interface EmpresaParaIndicar extends Omit<Empresa, 'quadro_socios' | 'documentos'> {

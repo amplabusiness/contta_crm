@@ -42,8 +42,15 @@ const buildSalesTimeline = (deals: any[], months = 6) => {
   deals.forEach((deal) => {
     const createdAt = deal.created_at ? new Date(deal.created_at) : undefined;
     if (!createdAt || Number.isNaN(createdAt.getTime()) || createdAt < rangeStart) {
-      try {
-        const [dealsResult, tasksResult] = await Promise.all([
+      return;
+    }
+
+    const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!timeline[key]) {
+      timeline[key] = { sales: 0, revenue: 0 };
+    }
+
     timeline[key].sales += 1;
     if (deal.stage === 'Closed Won') {
       timeline[key].revenue += ensureNumber(deal.value);
@@ -191,27 +198,18 @@ export default async function handler(
     const recentActivities = buildRecentActivities(deals.slice(0, 20), tasks.slice(0, 20));
 
     let insightsHtml: string | null = null;
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (geminiKey) {
-      if (!process.env.API_KEY) {
-        process.env.API_KEY = geminiKey;
-      }
-      try {
-        insightsHtml = await generateAutomatedReport({
-          statCardsData,
-          salesChartData,
-          dealStageData,
-          totals: {
-            totalDeals,
-            totalRevenue,
-            totalTasks,
-            pendingTasks,
-          },
-        });
-      } catch (geminiError: any) {
-        console.warn('Falha ao gerar insights com Gemini:', geminiError?.message ?? geminiError);
-      }
-    }
+    // DEPRECATED: Use novo endpoint /api/analytics-report
+    // const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    // if (geminiKey) {
+    //   if (!process.env.API_KEY) {
+    //     process.env.API_KEY = geminiKey;
+    //   }
+    //   try {
+    //     insightsHtml = await generateAutomatedReport({...});
+    //   } catch (geminiError: any) {
+    //     console.warn('Falha ao gerar insights com Gemini:', geminiError?.message ?? geminiError);
+    //   }
+    // }
 
     response.status(200).json({
       statCardsData,

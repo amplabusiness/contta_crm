@@ -248,30 +248,18 @@ export default async function handler(
     };
 
     let insightsHtml: string | null = null;
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (geminiKey) {
-      if (!process.env.API_KEY) {
-        process.env.API_KEY = geminiKey;
-      }
-      try {
-        insightsHtml = await generateAutomatedReport({
-          report,
-          salesData,
-          dealData,
-          churnPredictions,
-          upsellOpportunities,
-          totals: {
-            totalRevenue,
-            totalOpenDeals,
-            overdueTasks,
-            totalDeals: deals.length,
-            totalTasks: tasks.length,
-          },
-        });
-      } catch (geminiError: any) {
-        console.warn('Falha ao gerar relatório com Gemini:', geminiError?.message ?? geminiError);
-      }
-    }
+    // DEPRECATED: Use novos endpoints /api/analytics-churn, /api/analytics-upsell, /api/analytics-report
+    // const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    // if (geminiKey) {
+    //   if (!process.env.API_KEY) {
+    //     process.env.API_KEY = geminiKey;
+    //   }
+    //   try {
+    //     insightsHtml = await generateAutomatedReport({...});
+    //   } catch (geminiError: any) {
+    //     console.warn('Falha ao gerar relatório com Gemini:', geminiError?.message ?? geminiError);
+    //   }
+    // }
 
     response.status(200).json({
       report,
