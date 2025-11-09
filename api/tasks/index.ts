@@ -1,28 +1,59 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireUser } from '../_lib/auth.ts';
 import { mapTaskRecordToResponse } from '../utils/formatters';
+
+const toHttpError = (status: number, message: string) =>
+  Object.assign(new Error(message), { status });
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.SUPABASE_SERVICE_KEY!,
 );
+
+const httpCorsHeaders = {
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Authorization, Content-Type, X-Requested-With, X-Api-Version',
+};
+
+const resolveRelatedDealName = async (dealId?: string | null): Promise<string> => {
+  if (!dealId) {
+    return 'N/A';
+  }
+
+  const { data, error } = await supabase
+    .from('deals')
+    .select('company_name')
+    .eq('id', dealId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`Não foi possível encontrar o negócio ${dealId} para a tarefa: ${error.message}`);
+    return 'N/A';
+  }
+
+  return data?.company_name ?? 'N/A';
+};
 
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  // CORS headers
-  response.setHeader('Access-Control-Allow-Credentials', 'true');
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  response.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  Object.entries(httpCorsHeaders).forEach(([key, value]) => {
+    response.setHeader(key, value);
+  });
 
   if (request.method === 'OPTIONS') {
-    response.status(200).end();
+    response.status(204).end();
     return;
   }
 
   try {
+    await requireUser(request, supabase);
+
     if (request.method === 'GET') {
       const { data, error } = await supabase
         .from('tasks')
@@ -44,52 +75,53 @@ export default async function handler(
         throw error;
       }
 
-      const tasks = (data ?? []).map(mapTaskRecordToResponse);
+      response.status(200).json((data ?? []).map(mapTaskRecordToResponse));
+      return;
+    }
 
-      response.status(200).json(tasks);
-    } else if (request.method === 'POST') {
-      // Extrair os campos do corpo da requisição
+    if (request.method === 'POST') {
       const {
         title,
         dueDate,
         priority,
         status,
         description,
-        relatedDealId, // camelCase vindo do frontend
-        assigneeId, // camelCase vindo do frontend
-        googleCalendarEventId
-      } = request.body;
+        relatedDealId,
+        assigneeId,
+        googleCalendarEventId,
+      } = request.body ?? {};
 
-      // Buscar o nome do negócio relacionado para desnormalização
-      let relatedDealName = 'N/A';
-      if (relatedDealId) {
-        const { data: dealData, error: dealError } = await supabase
-          .from('deals')
-          .select('company_name')
-          .eq('id', relatedDealId)
-          .single();
-        if (dealError) {
-          console.warn(`Aviso: Não foi possível encontrar o negócio ${relatedDealId} para a tarefa.`, dealError.message);
-        } else {
-          relatedDealName = dealData.company_name;
-        }
+      if (!title || typeof title !== 'string') {
+        throw toHttpError(400, 'Campo title é obrigatório.');
       }
 
-      // Montar o objeto para inserção no banco (snake_case)
+      const relatedDealName = await resolveRelatedDealName(relatedDealId);
+
       const { data, error } = await supabase
         .from('tasks')
         .insert({
           title,
-          due_date: dueDate,
+          due_date: dueDate ?? null,
           priority,
           status,
-          description,
-          deal_id: relatedDealId,
-          related_deal_name: relatedDealName, // Armazenar o nome desnormalizado
-          assignee_id: assigneeId,
-          google_calendar_event_id: googleCalendarEventId
+          description: description ?? null,
+          deal_id: relatedDealId ?? null,
+          related_deal_name: relatedDealName,
+          assignee_id: assigneeId ?? null,
+          google_calendar_event_id: googleCalendarEventId ?? null,
         })
-        .select()
+        .select(`
+          *,
+          deals:deal_id (
+            id,
+            company_name
+          ),
+          profiles:assignee_id (
+            id,
+            name,
+            email
+          )
+        `)
         .single();
 
       if (error) {
@@ -97,12 +129,16 @@ export default async function handler(
       }
 
       response.status(201).json(mapTaskRecordToResponse(data));
-    } else {
-      response.status(405).json({ message: 'Method not allowed' });
+      return;
     }
-  } catch (error: any) {
+
+    response.status(405).json({ message: 'Method not allowed' });
+  } catch (rawError: any) {
+    const error = rawError ?? {};
+    const status = typeof error.status === 'number' ? error.status : 500;
+    const message = error.message || 'Internal server error';
     console.error('Error in tasks API:', error);
-    response.status(500).json({ message: error.message || 'Internal server error' });
+    response.status(status).json({ message });
   }
 }
 

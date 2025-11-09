@@ -46,6 +46,13 @@ const StatusIcon: React.FC<{ status: Indicacao['status'] }> = ({ status }) => {
     }
 };
 
+const proximoNivelMap: Record<ProgramaIndicacoesStatus['nivel'], ProgramaIndicacoesStatus['nivel'] | null> = {
+    Bronze: 'Prata',
+    Prata: 'Ouro',
+    Ouro: 'Platina',
+    Platina: null,
+};
+
 const Indicacoes: React.FC = () => {
   const [status, setStatus] = useState<ProgramaIndicacoesStatus | null>(null);
   const [minhasIndicacoes, setMinhasIndicacoes] = useState<Indicacao[]>([]);
@@ -79,7 +86,8 @@ const Indicacoes: React.FC = () => {
   if (error) return <div className="text-center p-8 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg">{error}</div>;
   if (!status) return null;
 
-  const progressPercent = (status.indicacoes_convertidas / status.meta_proximo_nivel) * 100;
+  const metaAtual = Math.max(1, status.meta_proximo_nivel);
+  const proximoNivel = proximoNivelMap[status.nivel];
 
   return (
     <div className="space-y-8">
@@ -111,72 +119,91 @@ const Indicacoes: React.FC = () => {
             </p>
           </div>
         </div>
-        <div>
-           <div className="flex justify-between mb-1">
-                <span className="text-sm font-medium text-indigo-300">Próximo Nível: Platina</span>
-                <span className="text-sm font-medium text-indigo-300">{status.indicacoes_convertidas} de {status.meta_proximo_nivel}</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
-                <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progressPercent}%` }}></div>
-            </div>
-             <p className="text-xs text-center mt-2 text-gray-400">{status.beneficio_atual}</p>
-        </div>
+    <div>
+       <div className="flex justify-between mb-1">
+        <span className="text-sm font-medium text-indigo-300">
+          {proximoNivel ? `Próximo Nível: ${proximoNivel}` : 'Nível máximo atingido'}
+        </span>
+        <span className="text-sm font-medium text-indigo-300">{status.indicacoes_convertidas} de {status.meta_proximo_nivel}</span>
+      </div>
+      <progress
+        value={Math.min(status.indicacoes_convertidas, metaAtual)}
+        max={metaAtual}
+        className="w-full h-2.5 overflow-hidden rounded-full bg-gray-700 text-indigo-600 accent-indigo-600"
+      />
+       <p className="text-xs text-center mt-2 text-gray-400">{status.beneficio_atual}</p>
+    </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Empresas para Indicar */}
         <div className="space-y-4">
             <h2 className="text-xl font-semibold text-white">📍 Empresas Próximas para Indicar (raio de 5km)</h2>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                {empresas.map(empresa => (
-                    <div key={empresa.cnpj} className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-lg">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="font-semibold text-white">{empresa.nome_fantasia}</h3>
-                                <p className="text-sm text-gray-400">{empresa.razao_social}</p>
-                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                                    <span className="flex items-center gap-1"><MapPinIcon className="w-4 h-4"/> {empresa.distancia_km?.toFixed(1)} km</span>
-                                    <span className="flex items-center gap-1"><BriefcaseIcon className="w-4 h-4"/> {empresa.porte}</span>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => alert(`Indicação de ${empresa.razao_social} enviada com sucesso! (simulação)`)}
-                                className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 transition-colors text-sm whitespace-nowrap"
-                            >
-                                Indicar
-                            </button>
-                        </div>
-                        <p className="text-xs text-center mt-3 text-green-300 bg-green-900/30 py-1 rounded-md">
-                            Ganhe ~{empresa.recompensa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} com esta indicação!
-                        </p>
-                    </div>
-                ))}
+      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+        {empresas.length === 0 && (
+          <p className="text-sm text-gray-400 bg-gray-800/40 border border-dashed border-gray-700 rounded-lg p-4">
+            Não encontramos empresas próximas com perfil aderente no momento. Tente novamente em alguns minutos.
+          </p>
+        )}
+        {empresas.map(empresa => {
+          const distanciaLegivel = typeof empresa.distancia_km === 'number'
+            ? `${empresa.distancia_km.toFixed(1)} km`
+            : 'Distância indisponível';
+          return (
+            <div key={empresa.cnpj} className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold text-white">{empresa.nome_fantasia || empresa.razao_social}</h3>
+                  <p className="text-sm text-gray-400">{empresa.razao_social}</p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                    <span className="flex items-center gap-1"><MapPinIcon className="w-4 h-4"/> {distanciaLegivel}</span>
+                    <span className="flex items-center gap-1"><BriefcaseIcon className="w-4 h-4"/> {empresa.porte}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => alert(`Indicação de ${empresa.razao_social} enviada com sucesso! (simulação)`)}
+                  className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 transition-colors text-sm whitespace-nowrap"
+                >
+                  Indicar
+                </button>
+              </div>
+              <p className="text-xs text-center mt-3 text-green-300 bg-green-900/30 py-1 rounded-md">
+                Ganhe ~{empresa.recompensa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} com esta indicação!
+              </p>
             </div>
+          );
+        })}
+      </div>
         </div>
 
         {/* Minhas Indicações */}
         <div className="space-y-4">
             <h2 className="text-xl font-semibold text-white">Suas Indicações</h2>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                {minhasIndicacoes.map(indicacao => (
-                    <div key={indicacao.id} className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-lg flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                           <StatusIcon status={indicacao.status} />
-                            <div>
-                                <p className="font-semibold text-white">{indicacao.empresa_nome}</p>
-                                <p className="text-xs text-gray-400">
-                                    Status: {indicacao.status} • Indicado em {new Date(indicacao.data_indicacao).toLocaleDateString('pt-BR')}
-                                </p>
-                            </div>
-                        </div>
-                        {indicacao.recompensa_ganha && (
-                            <p className="font-bold text-green-400 text-lg">
-                                +{indicacao.recompensa_ganha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </p>
-                        )}
-                    </div>
-                ))}
+      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+        {minhasIndicacoes.length === 0 && (
+          <p className="text-sm text-gray-400 bg-gray-800/40 border border-dashed border-gray-700 rounded-lg p-4">
+            Você ainda não enviou indicações. Assim que registrar uma nova empresa, ela aparecerá aqui.
+          </p>
+        )}
+        {minhasIndicacoes.map(indicacao => (
+          <div key={indicacao.id} className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-4">
+               <StatusIcon status={indicacao.status} />
+              <div>
+                <p className="font-semibold text-white">{indicacao.empresa_nome}</p>
+                <p className="text-xs text-gray-400">
+                  Status: {indicacao.status} • Indicado em {new Date(indicacao.data_indicacao).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
             </div>
+            {typeof indicacao.recompensa_ganha === 'number' && (
+              <p className="font-bold text-green-400 text-lg">
+                +{indicacao.recompensa_ganha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
         </div>
       </div>
     </div>

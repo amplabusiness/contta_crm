@@ -68,3 +68,50 @@ O estado é gerenciado primariamente através dos hooks do React (`useState`, `u
 -   **Funções e Variáveis**: camelCase (ex: `fetchDeals`).
 -   **Importações**: Organizadas com importações de bibliotecas primeiro, seguidas por importações locais. Usar caminhos relativos e incluir extensões de arquivo (`.ts`, `.tsx`).
 -   **Estilo**: Seguir as convenções do Tailwind CSS. Evitar CSS inline sempre que possível.
+Você é um engenheiro sênior encarregado de levar o Contta CRM para produção. Trabalhe dentro do repositório atual (Vite + React 19 + Tailwind) e siga rigorosamente estas orientações:
+
+Contexto e fontes obrigatórias
+- Leia e consulte continuamente os guias: COMECE_AQUI.md, GUIA_RAPIDO_CONTADOR.md, GUIA_ENV.md, SETUP.md, README_SETUP.md, PROXIMOS_PASSOS.md, ROADMAP_COMPLETO.md, ROADMAP_IMPLANTACAO_COMPLETO.md, ROADMAP_BACKEND_INTEGRACAO.md e BACKEND_DOCUMENTATION.md. Eles descrevem fluxo operativo, checklists, RLS e scripts obrigatórios.
+- Toda alteração estrutural em Supabase (tabela, RLS, seed) deve ser registrada via fluxo MCP descrito em MCP_AUDITORIA.md (use `npx mcp ...` e logue em `logs/audit-log.ndjson`).
+- Use os scripts em `scripts/` (setup-db, load-cnpjs, seed-demo-data, qa-queries, qa-rls) para preparar dados reais antes de validar UI.
+
+Objetivos técnicos
+1. Elimine totalmente qualquer dependência de mocks:
+   - Revise `services/apiService.ts` e `data/mockData.ts`. Todas as funções (`fetchDashboardData`, `fetchProspectCompanies`, `fetchDeals`, `fetchTasks`, `fetchAnalyticsData`, `executeGlobalSearch`, etc.) devem consumir apenas endpoints reais (`/api/dashboard-data`, `/api/prospects`, `/api/deals`, `/api/tasks`, `/api/analytics-data`, `/api/team`, `/api/reports`, `/api/compliance`, `/api/indicacoes`). Remova fallbacks e normalize respostas para bater com `types.ts`.
+   - Garanta que componentes (ex.: `Dashboard.tsx`, `Prospeccao.tsx`, `Negocios.tsx`, `Tarefas.tsx`, `Analytics.tsx`, `ReportGenerationModal.tsx`, `Indicacoes.tsx`, `Compliance.tsx`, `Header.tsx`) tratem loading/erro reais.
+
+2. Confirmar Supabase + RLS:
+   - Valide `supabase-schema.sql` contra `types.ts` (ex.: `Deal` agora aceita `createdAt?: string`).
+   - Rode `npm run setup-db` ou `scripts/setup-database.js` e aplique no Supabase.
+   - Use `scripts/qa-rls.js` para garantir que políticas permitem apenas o esperado (Admins vs Users). Registre qualquer mudança com MCP.
+
+3. Backend Vercel:
+   - Cada arquivo em `api/` deve validar input, autenticar via `api/_lib/auth.ts`, aplicar CORS padronizado e retornar erros significativos.
+   - Certifique-se de que rotas cobrem todos os casos de uso descritos em `BACKEND_DOCUMENTATION.md` (CRUD deals/tasks/team, prospects com sÓcios, analytics, dashboard, compliance, indicações, relatórios com Gemini, cnpj-lookup).
+   - Adapte o mapeamento para novos campos (ex.: `created_at -> createdAt` em `api/deals.ts`) e mantenha consistência com o front.
+
+4. Integração Gemini:
+   - `services/geminiService.ts` já expõe helpers (insights, análises, copilotos, relatórios, mapas). Certifique-se de que cada funcionalidade disponível na UI chame esses helpers passando prompts contextualizados (ex.: insights do dashboard, análises de prospect, assistente de comunicação). 
+   - Considere adicionar novas rotinas IA onde fizer sentido (ex.: sugerir próximas tarefas, ajustar roteiros em Negócios, revisar compliance). Sempre valide a presença de `GEMINI_API_KEY` e trate erros com fallback informativo, nunca com mocks.
+
+5. Experiência end-to-end:
+   - Rode `npm install`, `npm run build`, `npx vercel dev --yes` e execute smoke tests navegando por todas as views autenticadas (use Supabase Auth real).
+   - Verifique logs de cada rota serverless, garantindo que leituras/escritas batem no banco preenchido via scripts `load-cnpjs` e `seed-demo-data`.
+   - Documente qualquer requisito operacional adicional diretamente nos .md apropriados.
+
+6. Qualidade e engenharia:
+   - Siga padrões de código existentes (React hooks, Tailwind, TypeScript estrito). Mantenha imports com extensões explícitas.
+   - Adicione logs úteis e mensagens de erro amigáveis, mas nunca exponha segredos.
+   - Antes de finalizar, execute `npm run lint` (se disponível), `npm run build` e os scripts QA (queries/RLS). Inclua instruções de verificação no PR.
+   - Não esqueça de atualizar `tsconfig.json`, `vercel.json` e `.env` templates se surgirem novas variáveis ou caminhos.
+
+Checklist final
+- [ ] Zero mocks referenciados no front/back.
+- [ ] Banco Supabase alinhado ao schema + RLS verificados + logs MCP atualizados.
+- [ ] Todos os endpoints `/api/*` respondem com dados reais e estão cobertos no front.
+- [ ] Fluxos Gemini funcionam com prompt engineering consistente e fallback seguro.
+- [ ] Build (`npm run build`) e execução (`npx vercel dev --yes`) passam sem erros.
+- [ ] Documentação (.md) ajustada informando nova arquitetura ou passos adicionais.
+- [ ] PR preparado com testes verificados e instruções claras para reviewers.
+
+Siga essas etapas, registrando cada mudança relevante e garantindo que a aplicação entregue dados reais em produção.

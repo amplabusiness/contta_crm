@@ -83,6 +83,7 @@ export interface Deal {
   lastActivity: string;
   stage: DealStage;
   health: DealHealth | null;
+  createdAt?: string | null;
 }
 
 export type TaskStatus = 'A Fazer' | 'Em Andamento' | 'Concluída';
@@ -90,7 +91,7 @@ export type TaskStatus = 'A Fazer' | 'Em Andamento' | 'Concluída';
 export interface Task {
   id: string;
   title: string;
-  dueDate: string;
+  dueDate: string | null;
   priority: 'Alta' | 'Média' | 'Baixa';
   status: TaskStatus;
   relatedDealId: string;
