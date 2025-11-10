@@ -2462,27 +2462,27 @@ const authorizedFetch = async (input: RequestInfo, init: RequestInit = {}) => {
 
 ##### 4.2.3 `Negocios.tsx`
 - [x] Buscar deals reais via `fetchDeals()`
-- [ ] Implementar drag-and-drop com atualização no backend
-- [ ] Atualizar `stage` via `PATCH /api/deals/[id]`
-- [ ] Otimistic update + rollback em caso de erro
+- [x] Implementar drag-and-drop com atualização no backend
+- [x] Atualizar `stage` via `PATCH /api/deals/[id]`
+- [x] Otimistic update + rollback em caso de erro
 
 ##### 4.2.4 `Tarefas.tsx`
 - [x] Carregar tarefas reais
-- [ ] Implementar criação, edição, exclusão
-- [ ] Filtrar por status/prioridade localmente após fetch
+- [x] Implementar criação, edição, exclusão
+- [x] Filtrar por status/prioridade localmente após fetch
 - [x] Sincronizar com Google Calendar (usar `services/googleApiService.ts`)
 
 ##### 4.2.5 `Analytics.tsx`
 - [x] Buscar dados via `fetchAnalyticsData()`
 - [x] Renderizar gráficos com dados reais (Recharts)
 - [x] Exibir insights HTML gerados por Gemini
-- [ ] Adicionar botão "Atualizar Insights" para re-gerar
+- [x] Adicionar botão "Atualizar Insights" para re-gerar
 
 ##### 4.2.6 `Equipe.tsx` (Admin)
 - [x] Listar membros via `fetchTeamMembers()`
-- [ ] Adicionar modal de novo membro
-- [ ] Implementar atualização de status (Ativo/Inativo)
-- [ ] Restringir ações baseado em role do usuário
+- [x] Adicionar modal de novo membro
+- [x] Implementar atualização de status (Ativo/Inativo)
+- [x] Restringir ações baseado em role do usuário
 
 ##### 4.2.7 `Header.tsx` (Busca Global)
 - [x] Implementar `executeGlobalSearch()` com IA

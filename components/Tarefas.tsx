@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchTasks, updateTask, deleteTask } from '../services/apiService.ts';
+import { fetchTasks, updateTask, deleteTask, addTask, fetchDeals } from '../services/apiService.ts';
 import { createCalendarEvent } from '../services/googleApiService.ts';
-import { Task, TaskStatus, GoogleCalendarEvent } from '../types.ts';
-import { TasksIcon, ClockIcon, SearchIcon, TrashIcon, CalendarIcon, CheckCircleIcon } from './icons/Icons.tsx';
+import { Task, TaskStatus, GoogleCalendarEvent, Deal } from '../types.ts';
+import { TasksIcon, ClockIcon, SearchIcon, TrashIcon, CalendarIcon, CheckCircleIcon, XIcon } from './icons/Icons.tsx';
 import Tooltip from './Tooltip.tsx';
 
 const taskStatuses: TaskStatus[] = ['A Fazer', 'Em Andamento', 'Concluída'];
@@ -25,7 +25,194 @@ const LoadingState: React.FC = () => (
     </div>
 );
 
-const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => Promise<void>, onUpdate: (task: Task) => void; }> = ({ task, onDelete, onUpdate }) => {
+interface TaskFormValues {
+    title: string;
+    dueDate: string;
+    priority: Task['priority'];
+    status: TaskStatus;
+    relatedDealId: string;
+    description: string;
+}
+
+const defaultFormValues: TaskFormValues = {
+    title: '',
+    dueDate: '',
+    priority: 'Média',
+    status: 'A Fazer',
+    relatedDealId: '',
+    description: '',
+};
+
+const formatDateForInput = (value: string | null): string => {
+    if (!value) {
+        return '';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    return date.toISOString().slice(0, 10);
+};
+
+interface TaskFormModalProps {
+    open: boolean;
+    mode: 'create' | 'edit';
+    submitting: boolean;
+    error: string | null;
+    deals: Deal[];
+    initialValues: TaskFormValues;
+    onClose: () => void;
+    onSubmit: (values: TaskFormValues) => Promise<void>;
+}
+
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ open, mode, submitting, error, deals, initialValues, onClose, onSubmit }) => {
+    const [values, setValues] = useState<TaskFormValues>(initialValues);
+
+    useEffect(() => {
+        setValues(initialValues);
+    }, [initialValues, open]);
+
+    if (!open) {
+        return null;
+    }
+
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { name, value } = event.target;
+        setValues((current) => ({ ...current, [name]: value }));
+    };
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!values.title.trim()) {
+            setValues((current) => ({ ...current, title: current.title.trim() }));
+            return;
+        }
+        await onSubmit({ ...values, title: values.title.trim() });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-2xl rounded-lg bg-gray-900 border border-gray-700 shadow-xl">
+                <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+                    <h2 className="text-xl font-semibold text-white">
+                        {mode === 'create' ? 'Nova Tarefa' : 'Editar Tarefa'}
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="rounded-full p-1 text-gray-400 hover:text-white hover:bg-gray-800"
+                        aria-label="Fechar formulário"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4 px-6 py-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="flex flex-col gap-2 text-sm text-gray-300">
+                            Título
+                            <input
+                                name="title"
+                                value={values.title}
+                                onChange={handleChange}
+                                required
+                                maxLength={140}
+                                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-gray-300">
+                            Data de vencimento
+                            <input
+                                type="date"
+                                name="dueDate"
+                                value={values.dueDate}
+                                onChange={handleChange}
+                                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <label className="flex flex-col gap-2 text-sm text-gray-300">
+                            Prioridade
+                            <select
+                                name="priority"
+                                value={values.priority}
+                                onChange={handleChange}
+                                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <option value="Alta">Alta</option>
+                                <option value="Média">Média</option>
+                                <option value="Baixa">Baixa</option>
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-gray-300">
+                            Status
+                            <select
+                                name="status"
+                                value={values.status}
+                                onChange={handleChange}
+                                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                                {taskStatuses.map((status) => (
+                                    <option key={status} value={status}>{status}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-gray-300">
+                            Negócio relacionado
+                            <select
+                                name="relatedDealId"
+                                value={values.relatedDealId}
+                                onChange={handleChange}
+                                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <option value="">Nenhum</option>
+                                {deals
+                                    .slice()
+                                    .sort((a, b) => a.companyName.localeCompare(b.companyName))
+                                    .map((deal) => (
+                                        <option key={deal.id} value={deal.id}>{deal.companyName}</option>
+                                    ))}
+                            </select>
+                        </label>
+                    </div>
+                    <label className="flex flex-col gap-2 text-sm text-gray-300">
+                        Descrição
+                        <textarea
+                            name="description"
+                            value={values.description}
+                            onChange={handleChange}
+                            rows={4}
+                            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Detalhes adicionais, próximos passos ou contexto."
+                        />
+                    </label>
+                    {error && (
+                        <div className="rounded-lg border border-red-500/40 bg-red-900/30 px-4 py-2 text-sm text-red-300">
+                            {error}
+                        </div>
+                    )}
+                    <div className="flex flex-col gap-3 pt-2 md:flex-row md:justify-end">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-gray-800"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="rounded-lg bg-indigo-600/80 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600 disabled:opacity-60"
+                        >
+                            {submitting ? 'Salvando...' : mode === 'create' ? 'Criar tarefa' : 'Salvar alterações'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => Promise<void>; onUpdate: (task: Task) => void; onEdit: (task: Task) => void; }> = ({ task, onDelete, onUpdate, onEdit }) => {
     const dueDateObj = task.dueDate ? new Date(task.dueDate) : null;
     const isOverdue = dueDateObj ? dueDateObj < new Date() && task.status !== 'Concluída' : false;
     const [isSyncing, setIsSyncing] = useState(false);
@@ -110,6 +297,12 @@ const TaskCard: React.FC<{ task: Task; onDelete: (taskId: string) => Promise<voi
                     )}
                     {syncError && <p className="text-xs text-red-400 mt-1">{syncError}</p>}
                 </div>
+                <button
+                    onClick={() => onEdit(task)}
+                    className="w-full mt-2 rounded-md border border-gray-700 bg-transparent py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-gray-800"
+                >
+                    Editar tarefa
+                </button>
             </div>
         </div>
     );
@@ -121,13 +314,28 @@ const Tarefas: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<TaskStatus | 'Todos'>('Todos');
+    const [priorityFilter, setPriorityFilter] = useState<Task['priority'] | 'Todas'>('Todas');
+    const [deals, setDeals] = useState<Deal[]>([]);
+    const [formOpen, setFormOpen] = useState(false);
+    const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [formSubmitting, setFormSubmitting] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
 
     useEffect(() => {
-        const loadTasks = async () => {
+        const loadData = async () => {
             try {
                 setLoading(true);
-                const tasksData = await fetchTasks();
+                const [tasksData, dealsData] = await Promise.all([
+                    fetchTasks(),
+                    fetchDeals().catch((dealError) => {
+                        console.warn('Falha ao carregar negócios para formulário de tarefas.', dealError);
+                        return [] as Deal[];
+                    }),
+                ]);
                 setTasks(tasksData);
+                setDeals(dealsData);
                 setError(null);
             } catch (err) {
                 setError('Falha ao carregar as tarefas. Tente recarregar a página.');
@@ -136,7 +344,7 @@ const Tarefas: React.FC = () => {
                 setLoading(false);
             }
         };
-        loadTasks();
+        loadData();
     }, []);
     
     const handleDeleteTask = useCallback(async (taskId: string) => {
@@ -157,8 +365,80 @@ const Tarefas: React.FC = () => {
     const filteredTasks = useMemo(() => {
         return tasks.filter(task =>
             task.title.toLowerCase().includes(searchTerm.toLowerCase())
+            && (statusFilter === 'Todos' || task.status === statusFilter)
+            && (priorityFilter === 'Todas' || task.priority === priorityFilter)
         );
-    }, [tasks, searchTerm]);
+    }, [tasks, searchTerm, statusFilter, priorityFilter]);
+
+    const handleOpenCreate = () => {
+        setEditingTask(null);
+        setFormMode('create');
+        setFormError(null);
+        setFormOpen(true);
+    };
+
+    const handleOpenEdit = (task: Task) => {
+        setEditingTask(task);
+        setFormMode('edit');
+        setFormError(null);
+        setFormOpen(true);
+    };
+
+    const currentFormValues: TaskFormValues = useMemo(() => (
+        editingTask
+            ? {
+                title: editingTask.title,
+                dueDate: formatDateForInput(editingTask.dueDate),
+                priority: editingTask.priority,
+                status: editingTask.status,
+                relatedDealId: editingTask.relatedDealId ?? '',
+                description: editingTask.description ?? '',
+            }
+            : { ...defaultFormValues }
+    ), [editingTask, formMode, formOpen]);
+
+    const handleFormSubmit = async (values: TaskFormValues) => {
+        try {
+            setFormSubmitting(true);
+            setFormError(null);
+
+            if (formMode === 'edit' && editingTask) {
+                const updates: Partial<Task> & { relatedDealId?: string | null } = {
+                    title: values.title,
+                    dueDate: values.dueDate ? values.dueDate : null,
+                    priority: values.priority,
+                    status: values.status,
+                    description: values.description ? values.description : null,
+                    relatedDealId: values.relatedDealId ? values.relatedDealId : null,
+                };
+
+                const updated = await updateTask(editingTask.id, updates as Partial<Task>);
+                setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+            } else {
+                const relatedDeal = values.relatedDealId ? deals.find((deal) => deal.id === values.relatedDealId) : null;
+                const payload: Partial<Omit<Task, 'id' | 'createdAt'>> = {
+                    title: values.title,
+                    dueDate: values.dueDate ? values.dueDate : null,
+                    priority: values.priority,
+                    status: values.status,
+                    description: values.description ? values.description : null,
+                    relatedDealId: values.relatedDealId || undefined,
+                    relatedDealName: relatedDeal?.companyName ?? 'N/A',
+                };
+
+                const created = await addTask(payload as Omit<Task, 'id' | 'createdAt'>);
+                setTasks((current) => [created, ...current]);
+            }
+
+            setFormOpen(false);
+            setEditingTask(null);
+        } catch (err) {
+            console.error('Falha ao salvar tarefa', err);
+            setFormError('Não foi possível salvar a tarefa. Tente novamente.');
+        } finally {
+            setFormSubmitting(false);
+        }
+    };
 
     if (loading) return <LoadingState />;
     if (error) return <div className="text-center p-8 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg">{error}</div>;
@@ -181,17 +461,47 @@ const Tarefas: React.FC = () => {
                 </div>
             )}
             
-            <div className="mb-4">
-                <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                    <input
-                        type="text"
-                        placeholder="Buscar tarefa por título..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full md:w-1/3 pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+                <div className="flex flex-wrap gap-3 items-center">
+                    <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Buscar tarefa por título..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-64 pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as TaskStatus | 'Todos')}
+                        className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        aria-label="Filtrar tarefas por status"
+                    >
+                        <option value="Todos">Status: Todos</option>
+                        {taskStatuses.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={priorityFilter}
+                        onChange={(e) => setPriorityFilter(e.target.value as Task['priority'] | 'Todas')}
+                        className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        aria-label="Filtrar tarefas por prioridade"
+                    >
+                        <option value="Todas">Prioridade: Todas</option>
+                        {Object.keys(priorityConfig).map((priority) => (
+                            <option key={priority} value={priority}>{priority}</option>
+                        ))}
+                    </select>
                 </div>
+                <button
+                    onClick={handleOpenCreate}
+                    className="rounded-lg bg-indigo-600/80 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600"
+                >
+                    Nova tarefa
+                </button>
             </div>
 
             <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
@@ -214,13 +524,29 @@ const Tarefas: React.FC = () => {
                                     return dateA - dateB;
                                 })
                                 .map(task => (
-                                    <TaskCard key={task.id} task={task} onDelete={handleDeleteTask} onUpdate={handleUpdateTask} />
+                                    <TaskCard key={task.id} task={task} onDelete={handleDeleteTask} onUpdate={handleUpdateTask} onEdit={handleOpenEdit} />
                                 ))
                             }
                         </div>
                     </div>
                 ))}
             </div>
+
+            <TaskFormModal
+                open={formOpen}
+                mode={formMode}
+                submitting={formSubmitting}
+                error={formError}
+                deals={deals}
+                initialValues={currentFormValues}
+                onClose={() => {
+                    if (!formSubmitting) {
+                        setFormOpen(false);
+                        setEditingTask(null);
+                    }
+                }}
+                onSubmit={handleFormSubmit}
+            />
         </div>
     );
 };

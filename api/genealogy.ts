@@ -1,10 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-);
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Supabase não configurado: defina SUPABASE_URL/VITE_SUPABASE_URL e SUPABASE_SERVICE_KEY.');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
 
 interface NetworkNode {
   id: string;
@@ -117,7 +126,11 @@ async function buildNetworkGraph(
   const visited = new Set<string>();
   const nodes: NetworkNode[] = [];
   const edges: NetworkEdge[] = [];
-  let cached = true;
+  let cached = false;
+
+  const companyCache = new Map<string, Awaited<ReturnType<typeof getCompanyData>>>();
+  const socioCache = new Map<string, Awaited<ReturnType<typeof getSocioData>>>();
+  const socioCompaniesCache = new Map<string, Awaited<ReturnType<typeof getCompaniesBySocio>>>();
 
   // Queue para processar BFS (largura)
   const queue: Array<{ id: string; type: 'company' | 'person'; degree: number }> = [
@@ -132,7 +145,12 @@ async function buildNetworkGraph(
 
     if (current.type === 'company') {
       // Processar empresa
-      const empresa = await getCompanyData(current.id);
+      const empresa = await (async () => {
+        if (companyCache.has(current.id)) return companyCache.get(current.id)!;
+        const data = await getCompanyData(current.id);
+        companyCache.set(current.id, data);
+        return data;
+      })();
       
       if (!empresa) {
         console.warn(`⚠️  Empresa ${current.id} não encontrada`);
@@ -170,7 +188,7 @@ async function buildNetworkGraph(
               from: socioId,
               to: current.id,
               relationship: 'socio',
-              strength: (socio.participacao || 0) / 100
+              strength: socio.participacao != null ? socio.participacao / 100 : 0
             });
           }
         }
@@ -178,7 +196,12 @@ async function buildNetworkGraph(
 
     } else {
       // Processar sócio/pessoa
-      const socio = await getSocioData(current.id);
+      const socio = await (async () => {
+        if (socioCache.has(current.id)) return socioCache.get(current.id)!;
+        const data = await getSocioData(current.id);
+        socioCache.set(current.id, data);
+        return data;
+      })();
       
       if (!socio) {
         console.warn(`⚠️  Sócio ${current.id} não encontrado`);
@@ -199,7 +222,14 @@ async function buildNetworkGraph(
 
       // Buscar outras empresas deste sócio (próximo grau)
       if (current.degree < maxDegree) {
-        const empresas = await getCompaniesBySocio(current.id);
+        const empresas = await (async () => {
+          if (socioCompaniesCache.has(current.id)) {
+            return socioCompaniesCache.get(current.id)!;
+          }
+          const data = await getCompaniesBySocio(current.id);
+          socioCompaniesCache.set(current.id, data);
+          return data;
+        })();
         
         for (const empresa of empresas) {
           if (!visited.has(empresa.cnpj)) {
@@ -229,38 +259,68 @@ async function getCompanyData(cnpj: string) {
   try {
     const { data, error } = await supabase
       .from('empresas')
-      .select(`
-        *,
-        empresa_socios (
-          socios (
-            id,
-            nome,
-            cpf_cnpj,
-            qualificacao
-          ),
-          participacao
-        )
-      `)
+      .select(
+        'cnpj, razao_social, nome_fantasia, situacao_cadastral, porte, logradouro, numero, bairro, cidade, uf'
+      )
       .eq('cnpj', cnpj)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error(`Erro ao buscar empresa ${cnpj}:`, error);
       return null;
     }
 
-    // Formatar sócios
-    const socios = data.empresa_socios?.map((es: any) => ({
-      id: es.socios.id,
-      nome: es.socios.nome,
-      cpf_cnpj: es.socios.cpf_cnpj,
-      qualificacao: es.socios.qualificacao,
-      participacao: es.participacao || 0
-    })) || [];
+    if (!data) {
+      return null;
+    }
+
+    const { data: relacoes, error: relacoesError } = await supabase
+      .from('empresa_socios')
+      .select('socio_cpf_parcial, qualificacao, percentual_capital')
+      .eq('empresa_cnpj', cnpj);
+
+    if (relacoesError) {
+      console.error(`Erro ao buscar sócios da empresa ${cnpj}:`, relacoesError);
+      return {
+        ...data,
+        socios: [],
+        endereco: buildEndereco(data),
+      };
+    }
+
+    const socioCpfs = relacoes?.map((rel) => rel.socio_cpf_parcial).filter(Boolean) || [];
+
+    let sociosDetalhes: Array<{ cpf_parcial: string; nome_socio: string }>
+      = [];
+
+    if (socioCpfs.length > 0) {
+      const { data: sociosData, error: sociosError } = await supabase
+        .from('socios')
+        .select('cpf_parcial, nome_socio')
+        .in('cpf_parcial', socioCpfs);
+
+      if (sociosError) {
+        console.error(`Erro ao buscar dados dos sócios (${cnpj}):`, sociosError);
+      } else {
+        sociosDetalhes = sociosData || [];
+      }
+    }
+
+    const socios = (relacoes || []).map((rel) => {
+      const socioInfo = sociosDetalhes.find((s) => s.cpf_parcial === rel.socio_cpf_parcial);
+      return {
+        id: rel.socio_cpf_parcial,
+        nome: socioInfo?.nome_socio || 'Sócio não identificado',
+        cpf_cnpj: rel.socio_cpf_parcial,
+        qualificacao: rel.qualificacao,
+        participacao: rel.percentual_capital != null ? Number(rel.percentual_capital) : null,
+      };
+    });
 
     return {
       ...data,
-      socios
+      socios,
+      endereco: buildEndereco(data),
     };
 
   } catch (err) {
@@ -274,18 +334,39 @@ async function getCompanyData(cnpj: string) {
  */
 async function getSocioData(cpfOrId: string) {
   try {
-    const { data, error } = await supabase
+    const { data: socio, error } = await supabase
       .from('socios')
-      .select('*')
-      .or(`cpf_cnpj.eq.${cpfOrId},id.eq.${cpfOrId}`)
-      .single();
+      .select('cpf_parcial, nome_socio')
+      .eq('cpf_parcial', cpfOrId)
+      .maybeSingle();
 
     if (error) {
       console.error(`Erro ao buscar sócio ${cpfOrId}:`, error);
       return null;
     }
 
-    return data;
+    if (!socio) {
+      return null;
+    }
+
+    const { data: relacionamento, error: relError } = await supabase
+      .from('empresa_socios')
+      .select('qualificacao, percentual_capital')
+      .eq('socio_cpf_parcial', cpfOrId)
+      .limit(1)
+      .maybeSingle();
+
+    if (relError) {
+      console.error(`Erro ao buscar relação do sócio ${cpfOrId}:`, relError);
+    }
+
+    return {
+      id: socio.cpf_parcial,
+      nome: socio.nome_socio,
+      cpf_cnpj: socio.cpf_parcial,
+      qualificacao: relacionamento?.qualificacao,
+      participacao: relacionamento?.percentual_capital != null ? Number(relacionamento.percentual_capital) : null,
+    };
 
   } catch (err) {
     console.error('Erro ao buscar sócio:', err);
@@ -298,15 +379,10 @@ async function getSocioData(cpfOrId: string) {
  */
 async function getCompaniesBySocio(socioId: string) {
   try {
-    const { data, error } = await supabase
+    const { data: relacoes, error } = await supabase
       .from('empresa_socios')
-      .select(`
-        empresas (
-          cnpj,
-          razao_social
-        )
-      `)
-      .eq('socio_id', socioId)
+      .select('empresa_cnpj')
+      .eq('socio_cpf_parcial', socioId)
       .limit(10); // Limitar para evitar explosão de nodes
 
     if (error) {
@@ -314,14 +390,38 @@ async function getCompaniesBySocio(socioId: string) {
       return [];
     }
 
-    return data
-      ?.map((item: any) => item.empresas)
-      .filter(Boolean) || [];
+    const cnpjs = (relacoes || []).map((rel) => rel.empresa_cnpj).filter(Boolean);
+
+    if (cnpjs.length === 0) {
+      return [];
+    }
+
+    const { data: empresas, error: empresasError } = await supabase
+      .from('empresas')
+      .select('cnpj, razao_social, nome_fantasia, situacao_cadastral, cidade, uf, porte')
+      .in('cnpj', cnpjs);
+
+    if (empresasError) {
+      console.error(`Erro ao buscar dados das empresas do sócio ${socioId}:`, empresasError);
+      return [];
+    }
+
+    return empresas || [];
 
   } catch (err) {
     console.error('Erro ao buscar empresas por sócio:', err);
     return [];
   }
+}
+
+function buildEndereco(data: any) {
+  return {
+    logradouro: data.logradouro,
+    numero: data.numero,
+    bairro: data.bairro,
+    cidade: data.cidade,
+    uf: data.uf,
+  };
 }
 
 /**

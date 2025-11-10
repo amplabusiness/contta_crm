@@ -112,7 +112,7 @@ async function downloadAndSaveDocument(cnpj, tipo, endpoint) {
   try {
     const response = await rateLimitedFetch(`https://api.cnpja.com${endpoint}`, {
       headers: {
-        'Authorization': `Bearer ${CNPJA_API_KEY}`,
+        'Authorization': CNPJA_API_KEY,
       },
     });
 
@@ -159,6 +159,25 @@ async function downloadAndSaveDocument(cnpj, tipo, endpoint) {
   }
 }
 
+function normalizeTaxId(rawTaxId = '') {
+  if (!rawTaxId) return '';
+  return String(rawTaxId).replace(/[^0-9*]/g, '');
+}
+
+function parsePercentage(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  const normalized = String(value).replace('%', '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // ============================================
 // API CNPJá - Busca de Empresas e Sócios
 // ============================================
@@ -171,20 +190,15 @@ async function fetchCNPJData(cnpj) {
     console.log(`   📦 Cache HIT: ${normalized}`);
     return cache.get(normalized);
   }
-  
-  // Check Supabase (30 dias)
-  const { data: cached } = await supabase
-    .from('empresas')
-    .select('*')
-    .eq('cnpj', normalized)
-    .single();
-  
-  if (cached && cached.razao_social) {
-    console.log(`   💾 Supabase cache: ${cached.razao_social}`);
-    cache.set(normalized, cached);
-    return cached;
+
+  const cachedCompany = await getCompanyWithMembersFromSupabase(normalized);
+
+  if (cachedCompany) {
+    console.log(`   💾 Supabase cache: ${cachedCompany.razao_social || normalized}`);
+    cache.set(normalized, cachedCompany);
+    return cachedCompany;
   }
-  
+
   // Fetch da API CNPJá
   if (!CNPJA_API_KEY) {
     console.log(`   🤖 MOCK: ${normalized}`);
@@ -234,40 +248,91 @@ async function fetchCNPJData(cnpj) {
     };
     
     // Salvar empresa no Supabase
-    await supabase.from('empresas').upsert(empresa, { onConflict: 'cnpj' });
+    const { error: empresaError } = await supabase
+      .from('empresas')
+      .upsert(empresa, { onConflict: 'cnpj' });
+
+    if (empresaError) {
+      console.warn(`   ⚠️  Erro ao salvar empresa ${normalized}: ${empresaError.message}`);
+    }
+
+    // Captura de sócios retornados pela API
+    const apiMembers = data.company?.members || [];
+    const normalizedMembers = [];
     
-    // 🐛 FIX CRÍTICO: Salvar sócios no Supabase
-    const members = data.members || [];
-    
-    for (const member of members) {
-      if (!member.person) continue;
-      
-      // 1. Salvar sócio na tabela socios
-      const socio = {
-        cpf_parcial: member.person.tax_id?.replace(/\D/g, '') || '',
-        nome_socio: member.person.name || '',
-        tipo_pessoa: member.person.type || 'NATURAL', // NATURAL ou JURIDICA
-        qualificacao: member.role?.text || '',
-        created_at: new Date().toISOString(),
-      };
-      
-      if (socio.cpf_parcial && socio.nome_socio) {
-        await supabase.from('socios').upsert(socio, { onConflict: 'cpf_parcial' });
-        
-        // 2. Salvar relacionamento empresa-sócio
-        const relacao = {
-          cnpj: normalized,
-          cpf_socio: socio.cpf_parcial,
-          percentual_participacao: member.equity_share || 0,
-          data_entrada: member.since || null,
-          created_at: new Date().toISOString(),
-        };
-        
-        await supabase.from('empresa_socios').upsert(relacao, { 
-          onConflict: 'cnpj,cpf_socio',
-          ignoreDuplicates: false 
-        });
+    for (const member of apiMembers) {
+      const person = member?.person || {};
+      const rawTaxId = normalizeTaxId(
+        person.tax_id ||
+        person.taxId ||
+        person.document ||
+        member.document ||
+        member.tax_id ||
+        member.taxId
+      );
+
+      const nomeSocio = (person.name || member.name || '').trim();
+
+      if (!rawTaxId || !nomeSocio) {
+        continue;
       }
+
+      const socioPayload = {
+        cpf_parcial: rawTaxId,
+        nome_socio: nomeSocio,
+      };
+
+      const { error: socioError } = await supabase
+        .from('socios')
+        .upsert(socioPayload, { onConflict: 'cpf_parcial' });
+
+      if (socioError) {
+        console.warn(`   ⚠️  Erro ao salvar sócio ${rawTaxId}: ${socioError.message}`);
+        continue;
+      }
+
+      const percentual = parsePercentage(
+        member.equity_share ??
+        member.share_percentage ??
+        member.share ??
+        member.participation ??
+        person.equity_share ??
+        null
+      );
+
+      const relacaoPayload = {
+        empresa_cnpj: normalized,
+        socio_cpf_parcial: rawTaxId,
+        qualificacao: member.role?.text || member.role || null,
+        percentual_capital: percentual,
+      };
+
+      const { error: relacaoError } = await supabase
+        .from('empresa_socios')
+        .upsert(relacaoPayload, {
+          onConflict: 'empresa_cnpj,socio_cpf_parcial',
+          ignoreDuplicates: false,
+        });
+
+      if (relacaoError) {
+        console.warn(
+          `   ⚠️  Erro ao salvar relação ${normalized} -> ${rawTaxId}: ${relacaoError.message}`
+        );
+        continue;
+      }
+
+      const roleText = member.role?.text || member.role || null;
+
+      normalizedMembers.push({
+        person: {
+          tax_id: rawTaxId,
+          name: nomeSocio,
+          type: person.type || 'NATURAL',
+        },
+        role: roleText ? { text: roleText } : undefined,
+        equity_share: relacaoPayload.percentual_capital,
+        since: member.since || null,
+      });
     }
     
     // 📄 Download de PDFs (apenas se configurado)
@@ -275,13 +340,64 @@ async function fetchCNPJData(cnpj) {
       await downloadDocuments(normalized);
     }
     
-    cache.set(normalized, { ...empresa, members });
-    return { ...empresa, members };
+    cache.set(normalized, { ...empresa, members: normalizedMembers });
+    return { ...empresa, members: normalizedMembers };
     
   } catch (err) {
     console.error(`   ❌ Erro ao buscar ${normalized}: ${err.message}`);
     return null;
   }
+}
+
+async function getCompanyWithMembersFromSupabase(normalizedCnpj) {
+  const { data: empresa, error } = await supabase
+    .from('empresas')
+    .select('*')
+    .eq('cnpj', normalizedCnpj)
+    .maybeSingle();
+
+  if (error || !empresa) {
+    return null;
+  }
+
+  const { data: relacoes, error: relError } = await supabase
+    .from('empresa_socios')
+    .select('socio_cpf_parcial, qualificacao, percentual_capital')
+    .eq('empresa_cnpj', normalizedCnpj);
+
+  if (relError) {
+    console.warn(`   ⚠️  Erro ao buscar relacionamentos de ${normalizedCnpj}: ${relError.message}`);
+    return empresa;
+  }
+
+  if (!relacoes || relacoes.length === 0) {
+    return null; // força chamada da API para popular sócios
+  }
+
+  const socioCpfs = relacoes.map((rel) => rel.socio_cpf_parcial).filter(Boolean);
+
+  const { data: socios, error: sociosError } = await supabase
+    .from('socios')
+    .select('cpf_parcial, nome_socio')
+    .in('cpf_parcial', socioCpfs);
+
+  if (sociosError) {
+    console.warn(`   ⚠️  Erro ao buscar sócios de ${normalizedCnpj}: ${sociosError.message}`);
+  }
+
+  const socioMap = new Map((socios || []).map((socio) => [socio.cpf_parcial, socio.nome_socio]));
+
+  const members = relacoes.map((rel) => ({
+    person: {
+      tax_id: rel.socio_cpf_parcial,
+      name: socioMap.get(rel.socio_cpf_parcial) || 'Sócio não identificado',
+      type: 'NATURAL',
+    },
+    role: { text: rel.qualificacao },
+    equity_share: rel.percentual_capital || 0,
+  }));
+
+  return { ...empresa, members };
 }
 
 async function fetchSocioEmpresas(cpfParcial, nomeSocio) {

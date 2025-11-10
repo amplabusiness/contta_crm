@@ -141,7 +141,7 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
         setAnalysisState('loading');
         try {
             const [vinculosData, genealogiaData] = await Promise.all([
-                fetchVinculos([socio]),
+                fetchVinculos([socio], { empresaCnpj: empresa.cnpj }),
                 fetchGenealogia(socio)
             ]);
             setVinculos(vinculosData.find(v => v.socio_nome === socio.nome_socio) || null);

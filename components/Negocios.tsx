@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchDeals } from '../services/apiService.ts';
+import { fetchDeals, updateDealStage } from '../services/apiService.ts';
 import { Deal, DealStage } from '../types.ts';
 import { DealsIcon } from './icons/Icons.tsx';
 import DealCard from './DealCard.tsx';
@@ -30,6 +30,10 @@ const Negocios: React.FC<{ navigate: (view: string, payload: any) => void; }> = 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+    const [moveError, setMoveError] = useState<string | null>(null);
+    const [draggingDealId, setDraggingDealId] = useState<string | null>(null);
+    const [hoveredStage, setHoveredStage] = useState<DealStage | null>(null);
+    const [updatingDealIds, setUpdatingDealIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const loadDeals = async () => {
@@ -47,12 +51,81 @@ const Negocios: React.FC<{ navigate: (view: string, payload: any) => void; }> = 
         loadDeals();
     }, []);
 
+    const markUpdating = (dealId: string) => {
+        setUpdatingDealIds((prev) => {
+            const next = new Set(prev);
+            next.add(dealId);
+            return next;
+        });
+    };
+
+    const unmarkUpdating = (dealId: string) => {
+        setUpdatingDealIds((prev) => {
+            const next = new Set(prev);
+            next.delete(dealId);
+            return next;
+        });
+    };
+
     const dealsByStage = useMemo(() => {
         return dealStages.reduce((acc, stage) => {
             acc[stage] = deals.filter(deal => deal.stage === stage);
             return acc;
         }, {} as Record<DealStage, Deal[]>);
     }, [deals]);
+
+    const handleDragStart = (event: React.DragEvent<HTMLDivElement>, dealId: string) => {
+        if (updatingDealIds.has(dealId)) {
+            event.preventDefault();
+            return;
+        }
+        setMoveError(null);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', dealId);
+        setDraggingDealId(dealId);
+    };
+
+    const handleDragEnd = () => {
+        setDraggingDealId(null);
+        setHoveredStage(null);
+    };
+
+    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+    };
+
+    const handleDrop = async (event: React.DragEvent<HTMLDivElement>, targetStage: DealStage) => {
+        event.preventDefault();
+        setHoveredStage(null);
+
+        const dealId = event.dataTransfer.getData('text/plain') || draggingDealId;
+        if (!dealId) {
+            return;
+        }
+
+        const currentDeal = deals.find((deal) => deal.id === dealId);
+        if (!currentDeal || currentDeal.stage === targetStage) {
+            setDraggingDealId(null);
+            return;
+        }
+
+        const previousStage = currentDeal.stage;
+        setMoveError(null);
+        setDeals((prev) => prev.map((deal) => (deal.id === dealId ? { ...deal, stage: targetStage } : deal)));
+        markUpdating(dealId);
+
+        try {
+            const updatedDeal = await updateDealStage(dealId, targetStage);
+            setDeals((prev) => prev.map((deal) => (deal.id === dealId ? { ...deal, ...updatedDeal } : deal)));
+        } catch (updateError) {
+            console.error(updateError);
+            setDeals((prev) => prev.map((deal) => (deal.id === dealId ? { ...deal, stage: previousStage } : deal)));
+            setMoveError('Não foi possível atualizar o estágio. Tente novamente.');
+        } finally {
+            unmarkUpdating(dealId);
+            setDraggingDealId(null);
+        }
+    };
 
     if (loading) return <LoadingState />;
     if (error) return <div className="text-center p-8 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg">{error}</div>;
@@ -70,9 +143,27 @@ const Negocios: React.FC<{ navigate: (view: string, payload: any) => void; }> = 
                     </p>
                 </div>
 
+                {moveError && (
+                    <div className="text-sm text-red-300 bg-red-900/30 border border-red-500/30 px-4 py-3 rounded-lg">
+                        {moveError}
+                    </div>
+                )}
+
                 <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
                     {dealStages.map(stage => (
-                        <div key={stage} className="flex-shrink-0 w-80 bg-gray-900/50 rounded-lg flex flex-col">
+                        <div
+                            key={stage}
+                            className={`flex-shrink-0 w-80 bg-gray-900/50 rounded-lg flex flex-col transition-shadow ${hoveredStage === stage ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-900' : ''}`}
+                            onDragOver={handleDragOver}
+                            onDrop={(event) => handleDrop(event, stage)}
+                            onDragEnter={() => setHoveredStage(stage)}
+                            onDragLeave={(event) => {
+                                const nextTarget = event.relatedTarget as Node | null;
+                                if (!event.currentTarget.contains(nextTarget)) {
+                                    setHoveredStage((current) => (current === stage ? null : current));
+                                }
+                            }}
+                        >
                             <div className={`p-4 border-t-4 ${stageConfig[stage].color} rounded-t-lg`}>
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-semibold text-white">{stageConfig[stage].title}</h3>
@@ -83,7 +174,18 @@ const Negocios: React.FC<{ navigate: (view: string, payload: any) => void; }> = 
                             </div>
                             <div className="p-2 space-y-3 overflow-y-auto flex-1 bg-gray-800/20 rounded-b-lg">
                                 {dealsByStage[stage]?.map(deal => (
-                                    <DealCard key={deal.id} deal={deal} onOpenAssistant={setSelectedDeal} />
+                                    <div
+                                        key={deal.id}
+                                        className={`transition-opacity ${updatingDealIds.has(deal.id) ? 'opacity-60 pointer-events-none' : ''} ${draggingDealId === deal.id ? 'ring-2 ring-indigo-400 rounded-lg' : ''}`}
+                                    >
+                                        <DealCard
+                                            deal={deal}
+                                            onOpenAssistant={setSelectedDeal}
+                                            draggable={!updatingDealIds.has(deal.id)}
+                                            onDragStart={(event) => handleDragStart(event, deal.id)}
+                                            onDragEnd={handleDragEnd}
+                                        />
+                                    </div>
                                 ))}
                             </div>
                         </div>
