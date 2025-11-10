@@ -20,7 +20,10 @@
     "seed:deals": "tsx scripts/seed-deals.ts",
     "seed:tasks": "tsx scripts/seed-tasks.ts",
     "seed:indicacoes": "tsx scripts/seed-indicacoes.ts",
-    "seed:all": "npm run seed:deals && npm run seed:tasks && npm run seed:indicacoes"
+    "seed:all": "npm run seed:deals && npm run seed:tasks && npm run seed:indicacoes",
+    "update:cnpja": "tsx scripts/update-cnpja-cache.ts",
+    "update:tasks": "tsx scripts/update-tasks-weekly.ts",
+    "update:213-5": "tsx scripts/process-213-5-cases.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
