@@ -12,7 +12,7 @@ const StatCard: React.FC<StatCardData> = ({ title, value, change, changeType, ic
     <div className="bg-gray-800/50 border border-gray-700/50 p-5 rounded-xl shadow-lg flex flex-col justify-between">
       <div className="flex justify-between items-start">
         <h3 className="text-sm font-medium text-gray-400">{title}</h3>
-        {icon}
+        {icon ?? null}
       </div>
       <div>
         <p className="text-3xl font-bold text-white mt-2">{value}</p>

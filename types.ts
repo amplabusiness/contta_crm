@@ -5,7 +5,7 @@ export interface StatCardData {
   value: string;
   change: string;
   changeType: 'increase' | 'decrease';
-  icon: React.ReactElement;
+  icon?: React.ReactElement;
 }
 
 export interface SalesData {

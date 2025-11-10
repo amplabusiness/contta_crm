@@ -1,3 +1,4 @@
+import React from 'react';
 import {
     StatCardData, SalesData, DealStageData, RecentActivity, Empresa,
     ChurnPrediction, UpsellOpportunity, AutomatedReport, ConsentStatus, DataAccessLog,
@@ -5,6 +6,17 @@ import {
     GlobalSearchResults
 } from '../types.ts';
 import { supabase } from './supabaseClient.ts';
+import {
+    computeDashboardMetrics,
+    type DealRecord,
+    type TaskRecord,
+} from './dashboardMetrics.ts';
+import {
+    DollarSignIcon,
+    BriefcaseIcon,
+    ClockIcon,
+    TrendingUpIcon,
+} from '../components/icons/Icons.tsx';
 
 const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const headers = new Headers(init.headers ?? {});
@@ -25,17 +37,55 @@ const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {})
 
 // Dashboard
 export const fetchDashboardData = async (): Promise<{
-  statCardsData: StatCardData[];
-  salesChartData: SalesData[];
-  dealStageData: DealStageData[];
-  recentActivities: RecentActivity[];
+    statCardsData: StatCardData[];
+    salesChartData: SalesData[];
+    dealStageData: DealStageData[];
+    recentActivities: RecentActivity[];
 }> => {
-  // This now fetches from the real backend API endpoint.
-    const response = await authorizedFetch('/api/dashboard-data');
-  if (!response.ok) {
-      throw new Error('Falha ao buscar os dados do dashboard da API.');
-  }
-  return await response.json();
+    const [dealsResult, tasksResult] = await Promise.all([
+        supabase
+            .from('deals')
+            .select('id, company_name, value, stage, probability, expected_close_date, last_activity, created_at')
+            .order('created_at', { ascending: false })
+            .limit(400),
+        supabase
+            .from('tasks')
+            .select('id, title, status, priority, due_date, created_at, related_deal_name')
+            .order('created_at', { ascending: false })
+            .limit(400),
+    ]);
+
+    if (dealsResult.error) {
+        console.error('Falha ao buscar dados de negócios no Supabase:', dealsResult.error);
+        throw new Error('Falha ao buscar os dados do dashboard.');
+    }
+
+    if (tasksResult.error) {
+        console.error('Falha ao buscar dados de tarefas no Supabase:', tasksResult.error);
+        throw new Error('Falha ao buscar os dados do dashboard.');
+    }
+
+    const deals = (dealsResult.data ?? []) as DealRecord[];
+    const tasks = (tasksResult.data ?? []) as TaskRecord[];
+
+    const metrics = computeDashboardMetrics(deals, tasks);
+
+    const iconMap: Record<string, React.ReactElement> = {
+        'Receita Total': React.createElement(DollarSignIcon, { className: 'w-6 h-6 text-gray-400' }),
+        'Negócios Ativos': React.createElement(BriefcaseIcon, { className: 'w-6 h-6 text-gray-400' }),
+        'Tarefas Pendentes': React.createElement(ClockIcon, { className: 'w-6 h-6 text-gray-400' }),
+        'Taxa de Conversão': React.createElement(TrendingUpIcon, { className: 'w-6 h-6 text-gray-400' }),
+    };
+
+    const statCardsData: StatCardData[] = metrics.statCardsData.map((card) => {
+        const icon = iconMap[card.title];
+        return icon ? { ...card, icon } : card;
+    });
+
+    return {
+        ...metrics,
+        statCardsData,
+    };
 };
 
 // Prospecção
