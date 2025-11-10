@@ -72,14 +72,21 @@ const DealCard: React.FC<DealCardProps> = ({ deal, onOpenAssistant, draggable = 
     >
         <div>
             <h4 className="font-semibold text-white">{deal.companyName}</h4>
-            <p className="text-sm text-gray-400">{deal.contactName}</p>
+            <p className="text-sm text-gray-400">
+                {deal.contactName?.trim() ? deal.contactName : 'Contato não informado'}
+            </p>
             <p className="text-lg font-bold text-indigo-400 mt-2">
                 {deal.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
         </div>
         <div className="text-xs text-gray-400 flex items-center">
             <ClockIcon className="w-4 h-4 mr-2"/>
-            <span>Fecha em: {new Date(deal.expectedCloseDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
+            <span>
+                Fecha em:{' '}
+                {deal.expectedCloseDate
+                    ? new Date(deal.expectedCloseDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+                    : 'Sem previsão definida'}
+            </span>
         </div>
         <div className="pt-3 border-t border-gray-700/50 space-y-2">
             <HealthAnalysis />

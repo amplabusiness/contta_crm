@@ -2,6 +2,7 @@
 
 // FIX: Added file extension to import path.
 import { Socio, RedeDeVinculos } from '../types.ts';
+import { authorizedFetch } from './apiService.ts';
 
 interface FetchVinculosOptions {
   empresaCnpj?: string;
@@ -17,7 +18,7 @@ export const fetchVinculos = async (
   if (socios.length === 0) return [];
 
   try {
-    const response = await fetch('/api/vinculos', {
+    const response = await authorizedFetch('/api/vinculos', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

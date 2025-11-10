@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "type-check": "tsc --noEmit",
     "test:ai": "tsx scripts/test-ai-services.js",
     "test:ai:v2": "tsx scripts/test-gemini-optimizations.js",
     "test:ratelimit": "tsx scripts/test-rate-limiting.js",
@@ -31,9 +34,15 @@
     "recharts": "^3.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@types/node": "^22.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
     "@vercel/node": "^5.5.5",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "tsx": "^4.20.6",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

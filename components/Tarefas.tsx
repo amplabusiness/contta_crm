@@ -68,9 +68,15 @@ interface TaskFormModalProps {
 const TaskFormModal: React.FC<TaskFormModalProps> = ({ open, mode, submitting, error, deals, initialValues, onClose, onSubmit }) => {
     const [values, setValues] = useState<TaskFormValues>(initialValues);
 
-    useEffect(() => {
-        setValues(initialValues);
-    }, [initialValues, open]);
+    // Reset form when modal opens with new initial values
+    const prevOpenRef = React.useRef(open);
+    React.useEffect(() => {
+        if (open && !prevOpenRef.current) {
+            // Modal just opened - reset form
+            setValues(initialValues);
+        }
+        prevOpenRef.current = open;
+    }, [open, initialValues]);
 
     if (!open) {
         return null;

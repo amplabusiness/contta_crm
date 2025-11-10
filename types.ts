@@ -86,8 +86,8 @@ export interface Deal {
   contactEmail: string;
   value: number;
   probability: number;
-  expectedCloseDate: string;
-  lastActivity: string;
+  expectedCloseDate: string | null;
+  lastActivity: string | null;
   stage: DealStage;
   health: DealHealth | null;
   empresaCnpj?: string | null;  // Foreign key to empresas table

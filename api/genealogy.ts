@@ -166,7 +166,7 @@ async function buildNetworkGraph(
           cnpj: empresa.cnpj,
           nome_fantasia: empresa.nome_fantasia,
           situacao_cadastral: empresa.situacao_cadastral,
-          porte: empresa.porte_empresa,
+          porte: empresa.porte,
           endereco: empresa.endereco,
         }
       });

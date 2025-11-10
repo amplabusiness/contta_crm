@@ -26,7 +26,68 @@
 
 **Progresso Geral**: 🟢 **65% Concluído** | 🟡 **25% Em Andamento** | ⚪ **10% Pendente**
 
+### 🚀 Prioridades Imediatas (Novembro 2025)
+
+- **P1 · Operacionalizar dados core**: Mapear com Ampla Contabilidade Ltda. e Sérgio Carneiro Leão as fontes de dados reais para `deals`, `tasks` e `indicacoes`, incluindo definição de campos obrigatórios, gatilhos e periodicidade de atualização.
+- **P2 · Backend real-time**: Implementar endpoints Supabase/Vercel (`GET/POST/PUT/PATCH`) para `deals`, `tasks` e `indicacoes`, substituindo mocks e garantindo autenticação via Supabase Auth.
+- **P3 · Seed inicial confiável**: Criar scripts de seed/ingestão (Node + Supabase) que importem dados reais ou curadoria inicial, removendo mocks atuais do front.
+- **P4 · Sincronização front**: Atualizar hooks/serviços (`services/apiService.ts`, `services/vinculosService.ts`, etc.) e componentes (`Negocios`, `Tarefas`, `Indicacoes`, dashboards) para consumir os novos endpoints e refletir KPIs corretos.
+- **P5 · Rotina contínua**: Documentar e automatizar (cron/queue) as rotinas de atualização diária do importador CNPJá, revisão semanal de tarefas e geração de ordens de serviço para casos de natureza jurídica 213-5 (migração para SLU).
+- **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias).
+- **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI).
+
+> **Ordem de execução recomendada**: P1 → P2 → P3 → P4 → P5 → P6. P7 pode ser executada após deploy inicial. Cada etapa deve gerar commit + auditoria MCP antes de avançar.
+
 ---
+
+## 📡 Fluxo de Dados & Responsabilidades do CRM
+
+### 1. Fonte Única de Verdade
+- **CNPJá → Supabase**: `scripts/build-business-genealogy.js` alimenta `empresas`, `socios`, `empresa_socios`, PDFs em `empresa_documentos` e indicadores de parentesco. Esses dados abastecem Prospeção, Análise de Cliente, Vínculos e programas de indicação.
+- **Supabase Auth**: controla usuários (`profiles.role` diferencia Admin/User). Toda interação no front deve usar tokens Supabase (via `authorizedFetch`).
+- **IA (Gemini + LLMs)**: somente enriquece informações existentes (insights, pitches, sugestões). Nunca cria registros sem base no banco.
+
+### 2. Módulos e Quem Alimenta
+- **Prospecção & Análise de Cliente** (`Prospeccao.tsx`, `AnaliseCliente.tsx`, `EmpresaDetalhe.tsx`)
+  - Entrada: busca CNPJ manual ou lista pré-carregada de `empresas`.
+  - Backend: `/api/prospects`, `/api/cnpj-lookup` (cache Supabase → CNPJá).
+  - Ação chave: botão “Iniciar Negócio” cria registro em `deals`.
+- **Negócios (Funil Kanban)** (`Negocios.tsx`, `DealCard.tsx`)
+  - Alimentação: manual por vendedor via formulário (empresa conhecida).
+  - Backend: `/api/deals` (`createDeal`, `updateDealStage`, `deleteDeal`).
+  - IA: calcula saúde/sugestões no front (`getDealHealth`).
+- **Tarefas Operacionais** (`Tarefas.tsx`, modal em `DealCard.tsx`)
+  - Alimentação: manual (usuário cria follow-up). Webhook/cron avisa vencimento <48h.
+  - Backend: `/api/tasks` (`addTask`, `updateTask`, filtros status/prioridade/assignee`).
+  - IA: pode sugerir ação, mas criação é explícita.
+- **Programa de Indicações** (`Indicacoes.tsx`)
+  - Alimentação: usuário indica empresa manualmente ou aceita sugestão baseada em geolocalização/relacionamentos.
+  - Backend: `/api/indicacoes` CRUD completo + filtros.
+  - Lógica: marca `requiresMigration2135` quando natureza jurídica 213-5 detectada; gera OS p/ Ampla Contabilidade.
+- **Rede de Relacionamentos** (`Vinculos.tsx`, `api/genealogy-relatives.ts`, `api/vinculos.ts`)
+  - Alimentação: importador CNPJá > Supabase.
+  - Backend: expõe grafo + métricas (`totalSocios`, `totalRelacoes`, `parenteCount`, `requiresMigration2135`).
+  - Front: React Flow/D3 com filtros por grau e alertas de risco.
+
+### 3. Campos Essenciais por Coleção Supabase
+
+| Coleção        | Campos mínimos | Observações |
+|----------------|----------------|-------------|
+| `empresas`     | `cnpj`, `razao_social`, `situacao_cadastral`, `cidade`, `uf`, `telefones[]`, `emails[]` | Preenchidos via CNPJá |
+| `socios`       | `cpf_parcial`, `nome_socio` | Vínculo com empresas |
+| `empresa_socios` | `empresa_cnpj`, `socio_cpf_parcial`, `qualificacao`, `percentual_capital` | Usar para rede e indicações |
+| `deals`        | `id`, `empresa_cnpj`, `company_name`, `value`, `stage`, `owner_id`, `expected_close_date`, `created_at` | Criados manualmente |
+| `tasks`        | `id`, `title`, `due_date`, `status`, `priority`, `related_deal_id`, `assignee_id` | Cron avisa vencimento |
+| `indicacoes`   | `id`, `empresa_cnpj` ou `empresa_nome`, `status`, `indicado_por_id`, `recompensa_ganha`, `requiresMigration2135` | Integra com OS |
+| `empresa_documentos` | `cnpj`, `tipo_documento`, `url_storage`, `baixado_em` | PDFs CNPJá |
+
+### 4. Sequência Recomendada (“Magia” do CRM)
+1. **Habilitar ingestão completa** (CNPJá → Supabase) e validar com `audit-genealogy.ts`.
+2. **Substituir mocks** no `apiService.ts`, `genealogiaService.ts`, `vinculosService.ts` por chamadas Vercel + Supabase (`createDeal`, `addTask`, `createIndicacao`, etc.).
+3. **Wire-up front**: adicionar modais/botões (Iniciar Negócio, Nova Tarefa, Nova Indicação) consumindo funções reais e atualizando estado.
+4. **Auditar diariamente**: criar scripts `audit-deals.ts`, `audit-tasks.ts`, `audit-indicacoes.ts` e painéis de alertas (tarefas vazias, indicações sem follow-up, empresas 213-5).
+5. **Automatizar ordens de serviço**: pipeline que consulta `requiresMigration2135` e gera OS via playbook (Ampla Contabilidade Ltda., contato Sérgio Carneiro Leão).
+
 
 ## 🤖 MCPs Integrados ao Workflow
 
@@ -2243,16 +2304,23 @@ node scripts/load-cnpjs.js
 
 # Seed de deals/tasks/profiles de demonstração
 node scripts/seed-demo-data.js
+
+# Seeds específicos (dados reais ou curadoria inicial)
+npx tsx scripts/seed-deals.ts
+npx tsx scripts/seed-tasks.ts
+npx tsx scripts/seed-indicacoes.ts
 ```
 
 - [ ] Validar que `empresas` tem pelo menos 50 registros
 - [ ] Criar usuário admin (`scripts/create-master-user.js`)
-- [ ] Popular `deals` e `tasks` para testes
+- [ ] Popular `deals`, `tasks` e `indicacoes` com dados consistentes
+- [ ] Registrar origem dos dados (Ampla Contabilidade Ltda.) em `docs/data-lineage.md`
 
 #### 2.5 Auditoria MCP
 - [ ] Registrar cada alteração no schema via `npx mcp audit log`
 - [ ] Atualizar `logs/audit-log.ndjson`
 - [ ] Documentar em `MCP_AUDITORIA.md`
+- [ ] Adicionar scripts `audit-deals.ts`, `audit-tasks.ts`, `audit-indicacoes.ts` para monitorar lacunas (ex.: tabelas vazias)
 
 ### 🧪 Testes Fase 2
 ```bash
@@ -2266,6 +2334,8 @@ node scripts/qa-rls.js
 # No Supabase SQL Editor:
 SELECT COUNT(*) FROM empresas;
 SELECT COUNT(*) FROM deals;
+SELECT COUNT(*) FROM tasks;
+SELECT COUNT(*) FROM indicacoes;
 SELECT * FROM profiles WHERE role = 'Admin';
 ```
 
@@ -2306,6 +2376,8 @@ SELECT * FROM profiles WHERE role = 'Admin';
 - [ ] `PATCH /api/tasks/[id]` - atualizar tarefa
 - [ ] `DELETE /api/tasks/[id]` - deletar tarefa
 - [ ] Resolver `related_deal_name` via join
+- [ ] Incluir filtros por `status`, `priority`, `assignee`
+- [ ] Publicar webhook/cron para tasks vencendo em < 48h
 
 ##### 3.2.3 `/api/team`
 - [ ] `GET /api/team` - listar membros (profiles)
@@ -2313,6 +2385,21 @@ SELECT * FROM profiles WHERE role = 'Admin';
 - [ ] `PATCH /api/team/[id]` - atualizar status/role
 - [ ] `DELETE /api/team/[id]` - remover membro
 - [ ] Validar permissões via `requireUser` + role check
+
+##### 3.2.4 `/api/indicacoes`
+- [ ] `GET /api/indicacoes` - listar indicações
+- [ ] `POST /api/indicacoes` - registrar nova indicação (origem interna ou externa)
+- [ ] `PATCH /api/indicacoes/[id]` - atualizar status
+- [ ] `DELETE /api/indicacoes/[id]` - remover indicação duplicada
+- [ ] Suportar filtros por status, indicador e faixa de recompensa
+- [ ] Integrar geração de OS para natureza jurídica 213-5 → SLU
+
+##### 3.2.5 `/api/vinculos` & `/api/genealogy-relatives`
+- [ ] `GET /api/vinculos?cnpj=` - retornar rede de sócios (até 4º grau)
+- [ ] `GET /api/genealogy-relatives?cnpj=` - identificar parentescos e riscos de concentração
+- [ ] Validar cache Supabase antes de acionar CNPJá
+- [ ] Gerar métricas agregadas (`totalSocios`, `totalRelacoes`, `parenteCount`)
+- [ ] Expor flag `requiresMigration2135` para alimentar ordens de serviço
 
 #### 3.3 Endpoints de Prospecção
 
@@ -2500,6 +2587,8 @@ const authorizedFetch = async (input: RequestInfo, init: RequestInit = {}) => {
 - [x] Buscar status e minhas indicações
 - [x] Listar empresas sugeridas por CEP
 - [ ] Implementar botão "Indicar" com POST
+- [ ] Mostrar alertas quando natureza jurídica 213-5 exigir migração para SLU
+- [ ] Sincronizar recompensa estimada com retorno do backend
 
 ##### 4.2.10 `Compliance.tsx`
 - [x] Buscar dados de compliance
@@ -2510,6 +2599,17 @@ const authorizedFetch = async (input: RequestInfo, init: RequestInit = {}) => {
 - [x] Buscar dados via `/api/reports?type=...`
 - [x] Gerar PDF com jspdf + html2canvas
 - [x] Incluir insights gerados por Gemini
+
+##### 4.2.12 `Vinculos.tsx`
+- [ ] Consumir `/api/vinculos?cnpj=` para grafo de sócios
+- [ ] Integrar heatmap de relacionamentos (React Flow ou D3)
+- [ ] Destacar flag `requiresMigration2135` para criação rápida de OS
+- [ ] Lidar com loading/erro quando grafo > 500 nós
+
+##### 4.2.13 `AIAssistant.tsx`
+- [ ] Surface prompts prontos (prospector, analyzer, communicator)
+- [ ] Permitir executar checklist de migração SLU diretamente pelo assistente
+- [ ] Logar conversas relevantes no Supabase para auditoria
 
 #### 4.3 Tratamento de Erros Global
 - [ ] Criar `ErrorBoundary` React

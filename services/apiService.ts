@@ -18,7 +18,7 @@ import {
     TrendingUpIcon,
 } from '../components/icons/Icons.tsx';
 
-const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+export const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const headers = new Headers(init.headers ?? {});
 
     try {

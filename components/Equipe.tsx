@@ -27,9 +27,13 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, submitting, error
 
     useEffect(() => {
         if (!open) {
-            setName('');
-            setEmail('');
-            setRole('User');
+            // Reset form when modal closes (run after render)
+            const timer = setTimeout(() => {
+                setName('');
+                setEmail('');
+                setRole('User');
+            }, 0);
+            return () => clearTimeout(timer);
         }
     }, [open]);
 
