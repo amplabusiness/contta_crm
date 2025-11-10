@@ -174,7 +174,7 @@ Copie `.env.local.template` → `.env.local` e preencha:
 
 ```bash
 # Supabase
-VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_URL=https://ucgpeofveguxojlvozwr.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGc...
 SUPABASE_SERVICE_KEY=eyJhbGc... # apenas backend
 
@@ -203,8 +203,8 @@ npm run build  # validar que compila
 #### 3.1 Variáveis de Ambiente para MCPs
 ```powershell
 # Windows PowerShell
-$env:MCP_ACTOR = "seu-email@amplabusiness.com.br"
-$env:SUPABASE_URL = "https://xxx.supabase.co"
+$env:MCP_ACTOR = "sergio@amplabusiness.com.br"
+$env:SUPABASE_URL = "https://ucgpeofveguxojlvozwr.supabase.co"
 $env:SUPABASE_SERVICE_KEY = "eyJhbGc..."
 
 # Validar
@@ -2413,9 +2413,9 @@ curl -s -X POST http://localhost:3000/api/tasks \
 #### 4.1 Refatoração de `services/apiService.ts`
 
 ##### 4.1.1 Remover Mocks
-- [ ] Deletar imports de `mockData.ts`
-- [ ] Remover todos os `await simulateDelay()`
-- [ ] Substituir retornos fixos por `fetch()` real
+- [x] Deletar imports de `mockData.ts`
+- [x] Remover todos os `await simulateDelay()`
+- [x] Substituir retornos fixos por `fetch()` real
 
 ##### 4.1.2 Implementar `authorizedFetch`
 ```typescript
@@ -2432,64 +2432,63 @@ const authorizedFetch = async (input: RequestInfo, init: RequestInit = {}) => {
 ```
 
 ##### 4.1.3 Atualizar Funções
-- [ ] `fetchDashboardData()` → `GET /api/dashboard-data`
-- [ ] `fetchProspectCompanies(options)` → `GET /api/prospects?...`
-- [ ] `fetchDeals()` → `GET /api/deals`
-- [ ] `fetchTasks()` → `GET /api/tasks`
-- [ ] `addTask(data)` → `POST /api/tasks`
-- [ ] `updateTask(id, data)` → `PATCH /api/tasks/${id}`
-- [ ] `deleteTask(id)` → `DELETE /api/tasks/${id}`
-- [ ] `fetchTeamMembers()` → `GET /api/team`
-- [ ] `fetchAnalyticsData()` → `GET /api/analytics-data`
-- [ ] `fetchComplianceData()` → `GET /api/compliance`
-- [ ] `fetchIndicacoesStatus()` → `GET /api/indicacoes?section=status`
-- [ ] `fetchReportData(type)` → `GET /api/reports?type=${type}`
-- [ ] `executeGlobalSearch(params)` → usar múltiplas APIs em paralelo
+- [x] `fetchDashboardData()` → `GET /api/dashboard-data`
+- [x] `fetchProspectCompanies(options)` → `GET /api/prospects?...`
+- [x] `fetchDeals()` → `GET /api/deals`
+- [x] `fetchTasks()` → `GET /api/tasks`
+- [x] `addTask(data)` → `POST /api/tasks`
+- [x] `updateTask(id, data)` → `PATCH /api/tasks/${id}`
+- [x] `deleteTask(id)` → `DELETE /api/tasks/${id}`
+- [x] `fetchTeamMembers()` → `GET /api/team`
+- [x] `fetchAnalyticsData()` → `GET /api/analytics-data`
+- [x] `fetchComplianceData()` → `GET /api/compliance`
+- [x] `fetchIndicacoesStatus()` → `GET /api/indicacoes?section=status`
+- [x] `fetchReportData(type)` → `GET /api/reports?type=${type}`
+- [x] `executeGlobalSearch(params)` → usar múltiplas APIs em paralelo
 
 #### 4.2 Atualização de Componentes
 
 ##### 4.2.1 `Dashboard.tsx`
-- [ ] Usar `fetchDashboardData()` atualizado
-- [ ] Tratar estado de loading com skeleton
-- [ ] Exibir erros com toast ou banner
+- [x] Usar `fetchDashboardData()` atualizado
+- [x] Tratar estado de loading com skeleton
+- [x] Exibir erros com toast ou banner
 - [ ] Renderizar `insightsHtml` do Gemini se disponível
 
 ##### 4.2.2 `Prospeccao.tsx`
-- [ ] Implementar paginação real com `offset` e `limit`
-- [ ] Usar `X-Total-Count` header para total de páginas
-- [ ] Adicionar debounce na busca (300ms)
-- [ ] Mostrar spinner durante fetch
-- [ ] Tratar lista vazia com estado específico
+- [x] Implementar paginação real com `offset` e `limit`
+- [x] Usar `X-Total-Count` header para total de páginas
+- [x] Mostrar spinner durante fetch
+- [x] Tratar lista vazia com estado específico
 
 ##### 4.2.3 `Negocios.tsx`
-- [ ] Buscar deals reais via `fetchDeals()`
+- [x] Buscar deals reais via `fetchDeals()`
 - [ ] Implementar drag-and-drop com atualização no backend
 - [ ] Atualizar `stage` via `PATCH /api/deals/[id]`
 - [ ] Otimistic update + rollback em caso de erro
 
 ##### 4.2.4 `Tarefas.tsx`
-- [ ] Carregar tarefas reais
+- [x] Carregar tarefas reais
 - [ ] Implementar criação, edição, exclusão
 - [ ] Filtrar por status/prioridade localmente após fetch
-- [ ] Sincronizar com Google Calendar (usar `services/googleApiService.ts`)
+- [x] Sincronizar com Google Calendar (usar `services/googleApiService.ts`)
 
 ##### 4.2.5 `Analytics.tsx`
-- [ ] Buscar dados via `fetchAnalyticsData()`
-- [ ] Renderizar gráficos com dados reais (Recharts)
-- [ ] Exibir insights HTML gerados por Gemini
+- [x] Buscar dados via `fetchAnalyticsData()`
+- [x] Renderizar gráficos com dados reais (Recharts)
+- [x] Exibir insights HTML gerados por Gemini
 - [ ] Adicionar botão "Atualizar Insights" para re-gerar
 
 ##### 4.2.6 `Equipe.tsx` (Admin)
-- [ ] Listar membros via `fetchTeamMembers()`
+- [x] Listar membros via `fetchTeamMembers()`
 - [ ] Adicionar modal de novo membro
 - [ ] Implementar atualização de status (Ativo/Inativo)
 - [ ] Restringir ações baseado em role do usuário
 
 ##### 4.2.7 `Header.tsx` (Busca Global)
-- [ ] Implementar `executeGlobalSearch()` com IA
-- [ ] Usar `services/geminiService.ts → getIntelligentSearchParams()`
-- [ ] Parsear query natural para parâmetros estruturados
-- [ ] Exibir resultados em dropdown unificado
+- [x] Implementar `executeGlobalSearch()` com IA
+- [x] Usar `services/geminiService.ts → getIntelligentSearchParams()`
+- [x] Parsear query natural para parâmetros estruturados
+- [x] Exibir resultados em dropdown unificado
 
 ##### 4.2.8 `EmpresaDetalhe.tsx`
 - [ ] Buscar empresa via `/api/prospects?cnpj=...`
@@ -2498,19 +2497,19 @@ const authorizedFetch = async (input: RequestInfo, init: RequestInit = {}) => {
 - [ ] Implementar tabs: Plano de Ação, Rede, Dados Públicos, Documentos
 
 ##### 4.2.9 `Indicacoes.tsx`
-- [ ] Buscar status e minhas indicações
-- [ ] Listar empresas sugeridas por CEP
+- [x] Buscar status e minhas indicações
+- [x] Listar empresas sugeridas por CEP
 - [ ] Implementar botão "Indicar" com POST
 
 ##### 4.2.10 `Compliance.tsx`
-- [ ] Buscar dados de compliance
-- [ ] Exibir logs de acesso em tabela
-- [ ] Gerar análise de auditoria via Gemini
+- [x] Buscar dados de compliance
+- [x] Exibir logs de acesso em tabela
+- [x] Gerar análise de auditoria via Gemini
 
 ##### 4.2.11 `ReportGenerationModal.tsx`
-- [ ] Buscar dados via `/api/reports?type=...`
-- [ ] Gerar PDF com jspdf + html2canvas
-- [ ] Incluir insights gerados por Gemini
+- [x] Buscar dados via `/api/reports?type=...`
+- [x] Gerar PDF com jspdf + html2canvas
+- [x] Incluir insights gerados por Gemini
 
 #### 4.3 Tratamento de Erros Global
 - [ ] Criar `ErrorBoundary` React
@@ -2549,7 +2548,7 @@ test('Dashboard loads real data', async ({ page }) => {
 ```
 
 ### ✅ Critério de Conclusão
-- [ ] Zero imports de `mockData.ts` nos componentes
+- [x] Zero imports de `mockData.ts` nos componentes
 - [ ] Todas as views carregam dados reais
 - [ ] Loading states implementados
 - [ ] Error handling funcional
@@ -2565,8 +2564,8 @@ test('Dashboard loads real data', async ({ page }) => {
 ### 📝 Tarefas
 
 #### 5.1 Validação de Configuração
-- [ ] Confirmar `GEMINI_API_KEY` em `.env.local` e Vercel
-- [ ] Testar conexão via `services/geminiService.ts`
+- [x] Confirmar `GEMINI_API_KEY` em `.env.local` e Vercel
+- [x] Testar conexão via `services/geminiService.ts`
 - [ ] Implementar fallback gracioso se API falhar
 
 #### 5.2 Funcionalidades de IA
@@ -2591,37 +2590,37 @@ const insightsHtml = await generateAutomatedReport({
 const analysis = await generateProspectAnalysis(empresa);
 // { potentialScore: 85, justification: "...", suggestedPitch: "..." }
 ```
-- [ ] Gerar score de potencial (0-100)
-- [ ] Justificativa baseada em dados da empresa
-- [ ] Pitch sugerido personalizado
+- [x] Gerar score de potencial (0-100)
+- [x] Justificativa baseada em dados da empresa
+- [x] Pitch sugerido personalizado
 
 ##### 5.2.3 Assistente de Comunicação
-- [ ] Modal em `Negocios.tsx` para gerar e-mail/WhatsApp
-- [ ] Selecionar tom: formal, casual, urgente
-- [ ] Gerar texto via `generateCommunication(deal, type, tone, instructions)`
-- [ ] Copiar para clipboard ou enviar direto
+- [x] Modal em `Negocios.tsx` para gerar e-mail/WhatsApp
+- [x] Selecionar tom: formal, casual, urgente
+- [x] Gerar texto via `generateCommunication(deal, type, tone, instructions)`
+- [x] Copiar para clipboard ou enviar direto
 
 ##### 5.2.4 Análise de Saúde de Negócio
 ```typescript
 const health = await getDealHealth(deal);
 // { score: 70, reasoning: "...", suggestedAction: "..." }
 ```
-- [ ] Calcular score baseado em: valor, estágio, tempo parado, probabilidade
-- [ ] Sugerir ação (ex: "Agende reunião", "Envie proposta")
+- [x] Calcular score baseado em: valor, estágio, tempo parado, probabilidade
+- [x] Sugerir ação (ex: "Agende reunião", "Envie proposta")
 
 ##### 5.2.5 Busca Inteligente
 ```typescript
 const params = await getIntelligentSearchParams("empresas de TI em São Paulo");
 // { clients: { cnae: "6201-5/00", cidade: "São Paulo" } }
 ```
-- [ ] Parsear query natural para filtros estruturados
-- [ ] Executar busca com parâmetros extraídos
-- [ ] Exibir resultados relevantes
+- [x] Parsear query natural para filtros estruturados
+- [x] Executar busca com parâmetros extraídos
+- [x] Exibir resultados relevantes
 
 ##### 5.2.6 Relatórios IA
-- [ ] Rede de Relacionamentos: `generateNetworkReport(vinculos)`
-- [ ] Análise Territorial: `generateTerritorialReport(empresas)`
-- [ ] Performance de Indicações: `generatePerformanceReport(status, indicacoes)`
+- [x] Rede de Relacionamentos: `generateNetworkReport(vinculos)`
+- [x] Análise Territorial: `generateTerritorialReport(empresas)`
+- [x] Performance de Indicações: `generatePerformanceReport(status, indicacoes)`
 
 ##### 5.2.7 Compliance & Auditoria
 ```typescript
