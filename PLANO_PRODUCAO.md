@@ -24,7 +24,7 @@
 - **CNPJUtils**: 6 métodos utilitários para trabalhar com estrutura CNPJ
 - **Troubleshooting**: Erros comuns + soluções
 
-**Progresso Geral**: 🟢 **75% Concluído** | 🟡 **20% Em Andamento** | ⚪ **5% Pendente**
+**Progresso Geral**: 🟢 **80% Concluído** | 🟡 **15% Em Andamento** | ⚪ **5% Pendente**
 
 ### 🚀 Prioridades Imediatas (Novembro 2025)
 
@@ -35,14 +35,19 @@
   - ✅ `scripts/seed-tasks.ts`: 45 tarefas (49% pendente, 24% em andamento, 27% concluído)
   - ✅ `scripts/seed-indicacoes.ts`: 18 indicações (56% convertidas, R$ 1.950 em recompensas)
   - ✅ NPM scripts: `seed:deals`, `seed:tasks`, `seed:indicacoes`, `seed:all`
-- 🔄 **P4 · Sincronização front**: Atualizar hooks/serviços (`services/apiService.ts`, `services/vinculosService.ts`, etc.) e componentes (`Negocios`, `Tarefas`, `Indicacoes`, dashboards) para consumir os novos endpoints e refletir KPIs corretos. **[EM ANDAMENTO]**
+- ✅ **P4 · Sincronização front**: Atualizar hooks/serviços (`services/apiService.ts`) e componentes para consumir endpoints reais. **[CONCLUÍDO em 10/11/2025]**
+  - ✅ **P4.1 Deals**: createDeal, deleteDeal implementados (POST /api/deals, DELETE /api/deals/[id])
+  - ✅ **P4.2 Tasks**: fetchTasks, addTask, updateTask, deleteTask (CRUD completo)
+  - ✅ **P4.3 Indicações**: fetchIndicacoesStatus, fetchMinhasIndicacoes, fetchEmpresasParaIndicar
+  - ✅ **TypeScript**: 0 erros (corrigidos 4 erros nos scripts de seed)
+  - ✅ **Commit**: feat: add createDeal and deleteDeal to apiService + fix TypeScript errors in seed scripts
 - **P5 · Rotina contínua**: Documentar e automatizar (cron/queue) as rotinas de atualização diária do importador CNPJá, revisão semanal de tarefas e geração de ordens de serviço para casos de natureza jurídica 213-5 (migração para SLU). **[PENDENTE]**
 - **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias). **[PENDENTE]**
 - **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI). **[PLANEJADO]**
 
-> **Status atual**: ✅ P1-P3 concluídos | 🔄 P4 em andamento | ⏳ P5-P6 pendentes | 📋 P7 planejado
+> **Status atual**: ✅ P1-P4 concluídos | ⏳ P5-P6 pendentes | 📋 P7 planejado
 > 
-> **Próximo milestone**: Sincronizar frontend com backend (P4) para remover mocks e habilitar CRUD real em todos os módulos.
+> **Próximo milestone**: Automatizar rotinas de atualização (P5) e implementar auditorias de qualidade (P6).
 
 ---
 
