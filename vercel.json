@@ -22,6 +22,40 @@
       "src": "/(.*)",
       "dest": "/$1"
     }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=60, stale-while-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/update-cnpja",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/update-tasks",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/update-213-5",
+      "schedule": "0 9 1 * *"
+    }
   ]
 }
 
