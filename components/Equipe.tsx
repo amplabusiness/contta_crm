@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { fetchTeamMembers, fetchDeals } from '../services/apiService.ts';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchTeamMembers, fetchDeals, addTeamMember, updateTeamMemberStatus } from '../services/apiService.ts';
 import { fetchLatestEmails, isUserSignedIn, handleSignIn, initGoogleClient } from '../services/googleApiService.ts';
-import { TeamMember, EmailActivity, Deal } from '../types.ts';
-import { UsersIcon, InboxIcon } from './icons/Icons.tsx';
+import { supabase } from '../services/supabaseClient.ts';
+import { TeamMember, EmailActivity, Deal, UserRole } from '../types.ts';
+import { UsersIcon, InboxIcon, SparkleIcon, XIcon, CheckCircleIcon } from './icons/Icons.tsx';
 
 const LoadingState: React.FC<{ message: string }> = ({ message }) => (
     <div className="flex flex-col items-center justify-center p-10 text-center text-gray-400">
@@ -11,6 +12,119 @@ const LoadingState: React.FC<{ message: string }> = ({ message }) => (
     </div>
 );
 
+interface AddMemberModalProps {
+    open: boolean;
+    submitting: boolean;
+    error: string | null;
+    onClose: () => void;
+    onSubmit: (payload: { name: string; email: string; role: UserRole; status: 'Ativo' | 'Inativo' }) => Promise<void>;
+}
+
+const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, submitting, error, onClose, onSubmit }) => {
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [role, setRole] = useState<UserRole>('User');
+
+    useEffect(() => {
+        if (!open) {
+            // Reset form when modal closes (run after render)
+            const timer = setTimeout(() => {
+                setName('');
+                setEmail('');
+                setRole('User');
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+    }, [open]);
+
+    if (!open) {
+        return null;
+    }
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        await onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), role, status: 'Ativo' });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true">
+            <div className="w-full max-w-lg rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+                    <div className="flex items-center gap-2 text-white">
+                        <SparkleIcon className="w-5 h-5 text-indigo-400" />
+                        <h2 className="text-lg font-semibold">Adicionar novo membro</h2>
+                    </div>
+                    <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-gray-800 hover:text-white" aria-label="Fechar formulário">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4 px-6 py-6">
+                    <div>
+                        <label htmlFor="member-name" className="block text-sm font-medium text-gray-300">Nome completo</label>
+                        <input
+                            id="member-name"
+                            name="name"
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            required
+                            maxLength={120}
+                            className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="member-email" className="block text-sm font-medium text-gray-300">E-mail corporativo</label>
+                        <input
+                            id="member-email"
+                            name="email"
+                            type="email"
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            required
+                            maxLength={140}
+                            className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="member-role" className="block text-sm font-medium text-gray-300">Permissão inicial</label>
+                        <select
+                            id="member-role"
+                            name="role"
+                            value={role}
+                            onChange={(event) => setRole(event.target.value as UserRole)}
+                            className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="User">Usuário</option>
+                            <option value="Admin">Administrador</option>
+                        </select>
+                    </div>
+                    {error && (
+                        <div className="rounded-lg border border-red-500/40 bg-red-900/30 px-4 py-2 text-sm text-red-200">
+                            {error}
+                        </div>
+                    )}
+                    <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-gray-800"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-t-transparent" aria-hidden="true"></span>}
+                            {submitting ? 'Adicionando...' : 'Adicionar membro'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const Equipe: React.FC = () => {
     const [team, setTeam] = useState<TeamMember[]>([]);
     const [deals, setDeals] = useState<Deal[]>([]);
@@ -18,6 +132,12 @@ const Equipe: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [resolvingUser, setResolvingUser] = useState(true);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [addSubmitting, setAddSubmitting] = useState(false);
+    const [addError, setAddError] = useState<string | null>(null);
 
     const [gapiReady, setGapiReady] = useState(false);
     const [signedIn, setSignedIn] = useState(false);
@@ -53,6 +173,28 @@ const Equipe: React.FC = () => {
         loadInitialData();
     }, []);
 
+    useEffect(() => {
+        const resolveCurrentUser = async () => {
+            try {
+                setResolvingUser(true);
+                const { data, error: userError } = await supabase.auth.getUser();
+                if (userError) {
+                    console.warn('Falha ao obter usuário autenticado.', userError);
+                    setCurrentUserId(null);
+                    return;
+                }
+                setCurrentUserId(data?.user?.id ?? null);
+            } catch (resolveError) {
+                console.warn('Erro inesperado ao identificar o usuário atual.', resolveError);
+                setCurrentUserId(null);
+            } finally {
+                setResolvingUser(false);
+            }
+        };
+
+        resolveCurrentUser();
+    }, []);
+
     const handleSyncActivities = useCallback(async () => {
         if (!signedIn) {
             handleSignIn();
@@ -77,6 +219,44 @@ const Equipe: React.FC = () => {
         }
     }, [signedIn, deals, team, activities.length, handleSyncActivities]);
 
+    const currentUser = useMemo(() => team.find((member) => member.id === currentUserId) ?? null, [team, currentUserId]);
+    const canManageTeam = currentUser?.role === 'Admin';
+
+    const handleToggleStatus = async (memberId: string, currentStatus: 'Ativo' | 'Inativo') => {
+        if (!canManageTeam) {
+            return;
+        }
+        const nextStatus = currentStatus === 'Ativo' ? 'Inativo' : 'Ativo';
+        const previousTeam = [...team];
+        setTeam((members) => members.map((member) => (member.id === memberId ? { ...member, status: nextStatus } : member)));
+        try {
+            await updateTeamMemberStatus(memberId, nextStatus);
+            setActionError(null);
+        } catch (updateError) {
+            console.error('Falha ao atualizar status do membro.', updateError);
+            setTeam(previousTeam);
+            setActionError('Não foi possível atualizar o status. Tente novamente.');
+        }
+    };
+
+    const handleAddMember = async (payload: { name: string; email: string; role: UserRole; status: 'Ativo' | 'Inativo' }) => {
+        if (!canManageTeam) {
+            return;
+        }
+        setAddSubmitting(true);
+        setAddError(null);
+        try {
+            const created = await addTeamMember(payload);
+            setTeam((members) => [...members, created]);
+            setIsAddModalOpen(false);
+        } catch (addErr) {
+            console.error('Falha ao adicionar membro.', addErr);
+            setAddError('Não foi possível adicionar o membro. Verifique os dados e tente novamente.');
+        } finally {
+            setAddSubmitting(false);
+        }
+    };
+
     if (loading) return <LoadingState message="Carregando dados da equipe..." />;
     if (error) return <div className="text-center p-8 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg">{error}</div>;
 
@@ -90,25 +270,81 @@ const Equipe: React.FC = () => {
                 <p className="mt-1 text-gray-400">
                     Veja os membros da sua equipe e acompanhe as comunicações recentes com os clientes.
                 </p>
+                {!resolvingUser && !currentUser && (
+                    <p className="mt-2 text-sm text-amber-300/90">Entre na conta para gerenciar permissões da equipe.</p>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 {/* Team Members List */}
-                <div className="lg:col-span-1 bg-gray-800/50 border border-gray-700/50 rounded-xl shadow-lg p-6 space-y-4">
-                    <h2 className="text-lg font-semibold text-white">Membros da Equipe</h2>
-                    {team.map(member => (
-                        <div key={member.id} className="flex items-center gap-4">
-                            <img
-                                src={`https://ui-avatars.com/api/?name=${member.name.replace(' ', '+')}&background=random`}
-                                alt={member.name}
-                                className="w-10 h-10 rounded-full"
-                            />
-                            <div>
-                                <p className="font-semibold text-white">{member.name}</p>
-                                <p className="text-xs text-gray-400">{member.email}</p>
-                            </div>
+                <div className="lg:col-span-1 space-y-4">
+                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl shadow-lg p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-white">Membros da Equipe</h2>
+                            {canManageTeam && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddModalOpen(true)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+                                >
+                                    <SparkleIcon className="w-4 h-4" />
+                                    Novo membro
+                                </button>
+                            )}
                         </div>
-                    ))}
+                        {actionError && (
+                            <div className="rounded-lg border border-red-500/30 bg-red-900/20 px-3 py-2 text-xs text-red-200">{actionError}</div>
+                        )}
+                        {team.map((member) => {
+                            const isCurrent = member.id === currentUserId;
+                            const statusBadgeClasses = member.status === 'Ativo'
+                                ? 'bg-green-500/15 text-green-300 border border-green-500/30'
+                                : 'bg-red-500/15 text-red-300 border border-red-500/30';
+
+                            return (
+                                <div key={member.id} className="rounded-lg border border-gray-700/40 bg-gray-900/40 px-4 py-3">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex gap-3">
+                                            <img
+                                                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=random`}
+                                                alt={member.name}
+                                                className="h-10 w-10 rounded-full border border-gray-700"
+                                            />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-semibold text-white">{member.name}</p>
+                                                    {isCurrent && (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/20 px-2 py-0.5 text-[11px] font-semibold text-indigo-200">
+                                                            <CheckCircleIcon className="h-3 w-3" />
+                                                            Você
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-400">{member.email}</p>
+                                                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-700/60 px-2 py-0.5 text-gray-200">
+                                                        {member.role === 'Admin' ? 'Administrador' : 'Usuário'}
+                                                    </span>
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${statusBadgeClasses}`}>
+                                                        {member.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {canManageTeam && !isCurrent && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleStatus(member.id, member.status)}
+                                                className="text-xs font-semibold text-indigo-200 hover:text-white"
+                                            >
+                                                {member.status === 'Ativo' ? 'Desativar' : 'Reativar'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {/* Communication Feed */}
@@ -157,6 +393,19 @@ const Equipe: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            <AddMemberModal
+                open={isAddModalOpen && canManageTeam}
+                submitting={addSubmitting}
+                error={addError}
+                onClose={() => {
+                    if (!addSubmitting) {
+                        setIsAddModalOpen(false);
+                        setAddError(null);
+                    }
+                }}
+                onSubmit={handleAddMember}
+            />
         </div>
     );
 };

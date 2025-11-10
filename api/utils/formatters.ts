@@ -42,6 +42,28 @@ export interface EmpresaResponse {
   distancia_km?: number;
 }
 
+export interface DealHealthResponse {
+  score: number;
+  reasoning: string;
+  suggestedAction: string;
+}
+
+export interface DealResponse {
+  id: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  value: number;
+  probability: number;
+  expectedCloseDate: string | null;
+  lastActivity: string | null;
+  stage: string;
+  health: DealHealthResponse | null;
+  empresaCnpj: string | null;
+  ownerId: string | null;
+  createdAt: string | null;
+}
+
 export interface TaskResponse {
   id: string;
   title: string;
@@ -171,6 +193,40 @@ export const mapEmpresaRecordToResponse = (record: any): EmpresaResponse => {
     telefones: ensureArray<string>(record.telefones),
     emails: ensureArray<string>(record.emails).map((email: string) => email.toLowerCase()),
     documentos: [],
+  };
+};
+
+export const mapDealRecordToResponse = (deal: any): DealResponse => {
+  const parsedValue = typeof deal.value === 'number' ? deal.value : Number(deal.value ?? 0);
+  const parsedProbability =
+    typeof deal.probability === 'number' ? deal.probability : Number(deal.probability ?? 0);
+
+  const parsedHealthScore = Number(
+    deal.health_score ?? deal.healthScore ?? Number.NaN,
+  );
+  const hasHealth = Number.isFinite(parsedHealthScore);
+
+  return {
+    id: deal.id,
+    companyName: deal.company_name ?? deal.companyName ?? '',
+    contactName: deal.contact_name ?? deal.contactName ?? '',
+    contactEmail: deal.contact_email ?? deal.contactEmail ?? '',
+    value: Number.isFinite(parsedValue) ? parsedValue : 0,
+    probability: Number.isFinite(parsedProbability) ? parsedProbability : 0,
+    expectedCloseDate: deal.expected_close_date ?? deal.expectedCloseDate ?? null,
+    lastActivity: deal.last_activity ?? deal.lastActivity ?? null,
+    stage: deal.stage ?? 'Prospecting',
+    health: hasHealth
+      ? {
+          score: parsedHealthScore,
+          reasoning: deal.health_reasoning ?? deal.healthReasoning ?? '',
+          suggestedAction:
+            deal.health_suggested_action ?? deal.healthSuggestedAction ?? '',
+        }
+      : null,
+    empresaCnpj: deal.empresa_cnpj ?? deal.empresaCnpj ?? null,
+    ownerId: deal.owner_id ?? deal.ownerId ?? null,
+    createdAt: deal.created_at ?? deal.createdAt ?? null,
   };
 };
 

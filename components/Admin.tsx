@@ -240,7 +240,7 @@ const Admin: React.FC = () => {
                         {!syncing && activities.length === 0 && (
                             <div className="text-center py-10 text-gray-500">
                                 <p>Nenhuma atividade de e-mail encontrada.</p>
-                                <p className="text-sm">Clique em "Sincronizar" para buscar as comunicações.</p>
+                                <p className="text-sm">Clique em &quot;Sincronizar&quot; para buscar as comunicações.</p>
                             </div>
                         )}
                         {filteredActivities.map(activity => (

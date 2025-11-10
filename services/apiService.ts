@@ -2,7 +2,7 @@ import React from 'react';
 import {
     StatCardData, SalesData, DealStageData, RecentActivity, Empresa,
     ChurnPrediction, UpsellOpportunity, AutomatedReport, ConsentStatus, DataAccessLog,
-    ProgramaIndicacoesStatus, Indicacao, EmpresaParaIndicar, Deal, Task, TaskStatus, TeamMember, UserRole, CompanyActivity,
+    ProgramaIndicacoesStatus, Indicacao, EmpresaParaIndicar, Deal, DealStage, Task, TaskStatus, TeamMember, UserRole, CompanyActivity,
     GlobalSearchResults
 } from '../types.ts';
 import { supabase } from './supabaseClient.ts';
@@ -18,7 +18,7 @@ import {
     TrendingUpIcon,
 } from '../components/icons/Icons.tsx';
 
-const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+export const authorizedFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const headers = new Headers(init.headers ?? {});
 
     try {
@@ -240,16 +240,52 @@ export const fetchEmpresasParaIndicar = async (cepOrigem: string): Promise<Empre
 
 // Negócios
 export const fetchDeals = async (): Promise<Deal[]> => {
-    // This now fetches from the real backend API endpoint.
-    // Ensure the Vercel serverless function at /api/deals is created and connected to Supabase as per BACKEND_DOCUMENTATION.md.
     const response = await authorizedFetch('/api/deals');
     if (!response.ok) {
-        // The Negocios.tsx component will catch this error and display a message.
         throw new Error('Falha ao buscar negócios da API. Verifique se o backend está funcionando.');
     }
     const deals: Deal[] = await response.json();
     return deals;
 }
+
+export const createDeal = async (dealData: Omit<Deal, 'id' | 'createdAt'>): Promise<Deal> => {
+    const response = await authorizedFetch('/api/deals', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dealData),
+    });
+    if (!response.ok) {
+        throw new Error('Falha ao criar negócio.');
+    }
+    return await response.json();
+};
+
+export const updateDealStage = async (dealId: string, nextStage: DealStage): Promise<Deal> => {
+    const response = await authorizedFetch(`/api/deals/${dealId}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ stage: nextStage }),
+    });
+
+    if (!response.ok) {
+        throw new Error('Falha ao atualizar o estágio do negócio.');
+    }
+
+    return await response.json();
+};
+
+export const deleteDeal = async (dealId: string): Promise<void> => {
+    const response = await authorizedFetch(`/api/deals/${dealId}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) {
+        throw new Error('Falha ao deletar negócio.');
+    }
+};
 
 // Tarefas
 export const fetchTasks = async (): Promise<Task[]> => {

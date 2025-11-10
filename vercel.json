@@ -13,14 +13,44 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=60, stale-while-revalidate"
+        }
+      ]
     },
     {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/update-cnpja",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/update-tasks",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/update-213-5",
+      "schedule": "0 9 1 * *"
     }
   ]
 }

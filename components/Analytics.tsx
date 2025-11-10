@@ -1,11 +1,17 @@
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // FIX: Added file extensions to import paths.
 import { fetchAnalyticsData } from '../services/apiService.ts';
 import { AutomatedReport, ChurnPrediction, UpsellOpportunity } from '../types.ts';
 import { ReportsIcon, TrendingDownIcon, DollarSignIcon, SparkleIcon, DownloadIcon } from './icons/Icons.tsx';
 import ReportGenerationModal from './ReportGenerationModal.tsx';
+
+const escapeHtml = (value: string) =>
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
 const LoadingState: React.FC = () => (
     <div className="flex flex-col items-center justify-center p-10 text-center text-gray-400">
@@ -44,17 +50,7 @@ const UpsellCard: React.FC<{ opportunity: UpsellOpportunity }> = ({ opportunity 
         </p>
     </div>
 );
-
-
 const Analytics: React.FC = () => {
-    const escapeHtml = (value: string) =>
-        value
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-
     const [report, setReport] = useState<AutomatedReport | null>(null);
     const [churn, setChurn] = useState<ChurnPrediction[]>([]);
     const [upsell, setUpsell] = useState<UpsellOpportunity[]>([]);
@@ -62,32 +58,56 @@ const Analytics: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportHtml, setReportHtml] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshError, setRefreshError] = useState<string | null>(null);
+
+    const loadData = useCallback(async ({ useFullLoader = false }: { useFullLoader?: boolean } = {}) => {
+        if (useFullLoader) {
+            setLoading(true);
+            setError(null);
+        } else {
+            setRefreshing(true);
+            setRefreshError(null);
+        }
+
+        try {
+            const { report: apiReport, churnPredictions, upsellOpportunities, insightsHtml } = await fetchAnalyticsData();
+            setReport(apiReport);
+            setChurn(churnPredictions);
+            setUpsell(upsellOpportunities);
+
+            if (typeof insightsHtml === 'string' && insightsHtml.trim().length > 0) {
+                setReportHtml(insightsHtml);
+            } else if (apiReport?.summary) {
+                setReportHtml(`<p>${escapeHtml(apiReport.summary)}</p>`);
+            } else {
+                setReportHtml(null);
+            }
+        } catch (err) {
+            console.error('Falha ao gerar o relatório de análises.', err);
+            if (useFullLoader) {
+                setError('Falha ao gerar o relatório de análises.');
+            } else {
+                setRefreshError('Não foi possível atualizar os insights agora. Tente novamente em instantes.');
+            }
+        } finally {
+            if (useFullLoader) {
+                setLoading(false);
+            } else {
+                setRefreshing(false);
+            }
+        }
+    }, []);
 
     useEffect(() => {
-        const loadData = async () => {
-            try {
-                setLoading(true);
-                const { report: apiReport, churnPredictions, upsellOpportunities, insightsHtml } = await fetchAnalyticsData();
-                setReport(apiReport);
-                setChurn(churnPredictions);
-                setUpsell(upsellOpportunities);
+        loadData({ useFullLoader: true });
+    }, [loadData]);
 
-                if (typeof insightsHtml === 'string' && insightsHtml.trim().length > 0) {
-                    setReportHtml(insightsHtml);
-                } else if (apiReport?.summary) {
-                    setReportHtml(`<p>${escapeHtml(apiReport.summary)}</p>`);
-                } else {
-                    setReportHtml(null);
-                }
-            } catch (err) {
-                setError('Falha ao gerar o relatório de análises.');
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadData();
-    }, []);
+    const handleRefresh = () => {
+        if (!loading && !refreshing) {
+            void loadData();
+        }
+    };
 
     if (loading) return <LoadingState />;
     if (error) return <div className="text-center p-8 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg">{error}</div>;
@@ -105,14 +125,35 @@ const Analytics: React.FC = () => {
                             Relatórios e insights preditivos gerados automaticamente pela IA para acelerar sua tomada de decisão.
                         </p>
                     </div>
-                    <button
-                        onClick={() => setIsReportModalOpen(true)}
-                        className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 transition-colors duration-200"
-                    >
-                        <DownloadIcon className="w-5 h-5"/>
-                        Gerar Relatório PDF
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={handleRefresh}
+                            disabled={refreshing || loading}
+                            className="flex items-center gap-2 rounded-lg border border-indigo-400/40 bg-gray-900/60 px-4 py-2 text-sm font-semibold text-indigo-200 transition-colors hover:bg-gray-900/80 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {refreshing ? (
+                                <span className="inline-block w-4 h-4 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+                            ) : (
+                                <SparkleIcon className="w-5 h-5" />
+                            )}
+                            Atualizar Insights
+                        </button>
+                        <button
+                            onClick={() => setIsReportModalOpen(true)}
+                            className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 transition-colors duration-200"
+                        >
+                            <DownloadIcon className="w-5 h-5"/>
+                            Gerar Relatório PDF
+                        </button>
+                    </div>
                 </div>
+
+                {refreshError && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-900/30 px-4 py-2 text-sm text-red-200" role="status" aria-live="polite">
+                        {refreshError}
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     {/* Coluna Principal - Relatório */}

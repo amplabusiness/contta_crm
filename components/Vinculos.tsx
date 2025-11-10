@@ -141,7 +141,7 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
         setAnalysisState('loading');
         try {
             const [vinculosData, genealogiaData] = await Promise.all([
-                fetchVinculos([socio]),
+                fetchVinculos([socio], { empresaCnpj: empresa.cnpj }),
                 fetchGenealogia(socio)
             ]);
             setVinculos(vinculosData.find(v => v.socio_nome === socio.nome_socio) || null);
@@ -151,7 +151,7 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
             console.error(err);
             setAnalysisState('error');
         }
-    }, [socio]);
+    }, [socio, empresa.cnpj]);
     
 
     const handleGeneratePitch = useCallback(async (socio: Socio, connection: Vinculo | ParentePotencial) => {
@@ -197,7 +197,7 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
                         <button onClick={handleStartAnalysis} className="mt-2 text-sm text-indigo-400 hover:underline">Tentar novamente</button>
                     </div>
                 );
-            case 'success':
+            case 'success': {
                 const hasConnections = (vinculos?.vinculos && vinculos.vinculos.length > 0) || (genealogia?.parentes && genealogia.parentes.length > 0);
                 return (
                     hasConnections ? (
@@ -213,6 +213,7 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
                         <p className="text-center text-sm text-gray-500 pt-4">Nenhum vínculo societário ou familiar encontrado para este sócio.</p>
                     )
                 );
+            }
         }
     };
 

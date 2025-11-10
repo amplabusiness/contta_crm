@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 declare global {
   // Reutiliza o cliente durante HMR e em ambientes de teste.
-  // eslint-disable-next-line no-var
+   
   var __supabaseClient__: SupabaseClient | undefined;
 }
 

@@ -204,11 +204,11 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate, 
                                     )}
                                 </div>
                             ) : searchQuery && !isSearching ? (
-                                <div className="text-center py-10 text-gray-500">Nenhum resultado encontrado para "{searchQuery}".</div>
+                                <div className="text-center py-10 text-gray-500">Nenhum resultado encontrado para &quot;{searchQuery}&quot;.</div>
                             ) : (
                                 <div className="text-center py-10 text-gray-500">
                                     <p>Busque em linguagem natural.</p>
-                                    <p className="text-xs mt-1">Ex: "tarefas urgentes para a tech solutions"</p>
+                                    <p className="text-xs mt-1">Ex: &quot;tarefas urgentes para a tech solutions&quot;</p>
                                 </div>
                             )}
                         </div>
