@@ -24,7 +24,7 @@
 - **CNPJUtils**: 6 métodos utilitários para trabalhar com estrutura CNPJ
 - **Troubleshooting**: Erros comuns + soluções
 
-**Progresso Geral**: 🟢 **80% Concluído** | 🟡 **15% Em Andamento** | ⚪ **5% Pendente**
+**Progresso Geral**: 🟢 **85% Concluído** | 🟡 **10% Em Andamento** | ⚪ **5% Pendente**
 
 ### 🚀 Prioridades Imediatas (Novembro 2025)
 
@@ -41,13 +41,19 @@
   - ✅ **P4.3 Indicações**: fetchIndicacoesStatus, fetchMinhasIndicacoes, fetchEmpresasParaIndicar
   - ✅ **TypeScript**: 0 erros (corrigidos 4 erros nos scripts de seed)
   - ✅ **Commit**: feat: add createDeal and deleteDeal to apiService + fix TypeScript errors in seed scripts
-- **P5 · Rotina contínua**: Documentar e automatizar (cron/queue) as rotinas de atualização diária do importador CNPJá, revisão semanal de tarefas e geração de ordens de serviço para casos de natureza jurídica 213-5 (migração para SLU). **[PENDENTE]**
+- ✅ **P5 · Rotina contínua**: Criar e documentar rotinas de atualização diária (CNPJá), revisão semanal (tarefas) e automação de casos 213-5 (EIRELI→SLU). **[CONCLUÍDO em 10/11/2025]**
+  - ✅ **update-cnpja-cache.ts**: Atualiza empresas desatualizadas (> 90 dias) via CNPJá API
+  - ✅ **update-tasks-weekly.ts**: Relatório semanal de tarefas atrasadas (testado: 47 tasks, 3 atrasadas)
+  - ✅ **process-213-5-cases.ts**: Detecta EIRELI e gera ordens de serviço para migração SLU
+  - ✅ **Migrations**: `data_ultima_atualizacao` + tabela `ordens_servico`
+  - ✅ **Documentação**: `docs/ROTINAS_AUTOMATICAS.md` (Vercel Cron + GitHub Actions)
+  - ✅ **NPM scripts**: `update:cnpja`, `update:tasks`, `update:213-5`
 - **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias). **[PENDENTE]**
 - **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI). **[PLANEJADO]**
 
-> **Status atual**: ✅ P1-P4 concluídos | ⏳ P5-P6 pendentes | 📋 P7 planejado
+> **Status atual**: ✅ P1-P5 concluídos | ⏳ P6 pendente | 📋 P7 planejado
 > 
-> **Próximo milestone**: Automatizar rotinas de atualização (P5) e implementar auditorias de qualidade (P6).
+> **Próximo milestone**: Implementar auditorias de qualidade (P6) para validar integridade dos dados em produção.
 
 ---
 
