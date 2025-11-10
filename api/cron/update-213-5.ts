@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * Vercel Cron Job: Processamento de casos EIRELI → SLU (Lei 14.195/2021)
  * 
- * Schedule: 0 9 1 * * (primeiro dia de cada mês às 9h AM)
+ * Schedule: 0 9 1 * * (primeiro dia de cada mês às 9h UTC)
  * 
  * Detecta empresas EIRELI e gera ordens de serviço para migração SLU
  */
@@ -17,7 +17,8 @@ interface Empresa {
 
 interface ServiceOrder {
   empresa_cnpj: string;
-  tipo_servico: string;
+  empresa_nome: string;
+  tipo: string;
   descricao: string;
   status: string;
   prioridade: string;
@@ -57,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: existingOrders } = await supabase
       .from('ordens_servico')
       .select('empresa_cnpj')
-      .eq('tipo_servico', 'MIGRACAO_SLU')
+      .eq('tipo', 'MIGRACAO_SLU')
       .in('status', ['pendente', 'em_andamento']);
 
     const existingCnpjs = new Set(existingOrders?.map((o) => o.empresa_cnpj) || []);
@@ -70,7 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       ordersToCreate.push({
         empresa_cnpj: empresa.cnpj,
-        tipo_servico: 'MIGRACAO_SLU',
+        empresa_nome: empresa.razao_social,
+        tipo: 'MIGRACAO_SLU',
         descricao: `Migração EIRELI → SLU (Lei 14.195/2021) - ${empresa.razao_social}`,
         status: 'pendente',
         prioridade: 'media',
