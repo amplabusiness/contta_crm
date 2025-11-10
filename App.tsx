@@ -1,29 +1,30 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext.tsx';
 import { supabase } from './services/supabaseClient.ts';
 // FIX: Added file extensions to imports
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
 import Dashboard from './components/Dashboard.tsx';
-import Prospeccao from './components/Prospeccao.tsx';
-import ImageEditor from './components/ImageEditor.tsx';
-import Analytics from './components/Analytics.tsx';
-import Compliance from './components/Compliance.tsx';
-import Indicacoes from './components/Indicacoes.tsx';
-import PesquisaMercado from './components/PesquisaMercado.tsx';
-import Vinculos from './components/Vinculos.tsx';
-import Negocios from './components/Negocios.tsx';
-import Tarefas from './components/Tarefas.tsx';
-import Equipe from './components/Equipe.tsx';
-import Admin from './components/Admin.tsx';
-import Chatbot from './components/Chatbot.tsx';
-import VoiceAssistant from './components/VoiceAssistant.tsx';
-import AnaliseCliente from './components/AnaliseCliente.tsx';
-// FIX: Added file extension to import path.
-import EmpresaDetalhe from './components/EmpresaDetalhe.tsx';
 import LoginView from './components/auth/LoginView.tsx';
 import ForgotPasswordView from './components/auth/ForgotPasswordView.tsx';
 import ResetPasswordView from './components/auth/ResetPasswordView.tsx';
+
+// 🚀 LAZY LOADING: Componentes pesados carregados sob demanda
+const Prospeccao = lazy(() => import('./components/Prospeccao.tsx'));
+const ImageEditor = lazy(() => import('./components/ImageEditor.tsx'));
+const Analytics = lazy(() => import('./components/Analytics.tsx'));
+const Compliance = lazy(() => import('./components/Compliance.tsx'));
+const Indicacoes = lazy(() => import('./components/Indicacoes.tsx'));
+const PesquisaMercado = lazy(() => import('./components/PesquisaMercado.tsx'));
+const Vinculos = lazy(() => import('./components/Vinculos.tsx'));
+const Negocios = lazy(() => import('./components/Negocios.tsx'));
+const Tarefas = lazy(() => import('./components/Tarefas.tsx'));
+const Equipe = lazy(() => import('./components/Equipe.tsx'));
+const Admin = lazy(() => import('./components/Admin.tsx'));
+const Chatbot = lazy(() => import('./components/Chatbot.tsx'));
+const VoiceAssistant = lazy(() => import('./components/VoiceAssistant.tsx'));
+const AnaliseCliente = lazy(() => import('./components/AnaliseCliente.tsx'));
+const EmpresaDetalhe = lazy(() => import('./components/EmpresaDetalhe.tsx'));
 
 import { Empresa } from './types.ts';
 
@@ -204,12 +205,23 @@ const App: React.FC = () => {
         />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900/95">
           <div className="container mx-auto px-6 py-8">
-            {renderView()}
+            <Suspense fallback={
+              <div className="flex min-h-[400px] items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+                  <p className="text-sm text-gray-400">Carregando módulo...</p>
+                </div>
+              </div>
+            }>
+              {renderView()}
+            </Suspense>
           </div>
         </main>
       </div>
-      <Chatbot />
-      <VoiceAssistant />
+      <Suspense fallback={null}>
+        <Chatbot />
+        <VoiceAssistant />
+      </Suspense>
     </div>
   );
 };

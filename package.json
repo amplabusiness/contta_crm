@@ -54,6 +54,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "terser": "^5.44.1",
     "tsx": "^4.20.6",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

@@ -18,6 +18,29 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        // 🚀 Otimizações de performance
+        target: 'esnext',
+        minify: 'terser',
+        terserOptions: {
+          compress: {
+            drop_console: true,
+            drop_debugger: true,
+          },
+        },
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              // Separar vendor bundles grandes
+              'react-vendor': ['react', 'react-dom'],
+              'supabase-vendor': ['@supabase/supabase-js'],
+              'charts-vendor': ['recharts'],
+              'flow-vendor': ['reactflow'],
+            },
+          },
+        },
+        chunkSizeWarningLimit: 1000,
+      },
     };
 });
