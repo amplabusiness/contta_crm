@@ -24,7 +24,7 @@
 - **CNPJUtils**: 6 métodos utilitários para trabalhar com estrutura CNPJ
 - **Troubleshooting**: Erros comuns + soluções
 
-**Progresso Geral**: 🟢 **85% Concluído** | 🟡 **10% Em Andamento** | ⚪ **5% Pendente**
+**Progresso Geral**: 🟢 **90% Concluído** | 🟡 **5% Em Andamento** | ⚪ **5% Pendente**
 
 ### 🚀 Prioridades Imediatas (Novembro 2025)
 
@@ -48,12 +48,17 @@
   - ✅ **Migrations**: `data_ultima_atualizacao` + tabela `ordens_servico`
   - ✅ **Documentação**: `docs/ROTINAS_AUTOMATICAS.md` (Vercel Cron + GitHub Actions)
   - ✅ **NPM scripts**: `update:cnpja`, `update:tasks`, `update:213-5`
-- **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias). **[PENDENTE]**
+- ✅ **P6 · Qualidade & validação**: Criar scripts de auditoria para deals, tasks e empresas, identificando problemas críticos e gerando relatórios acionáveis. **[CONCLUÍDO em 10/11/2025]**
+  - ✅ **audit-deals.ts**: 27 deals auditados (score 89/100, 3 com health crítico)
+  - ✅ **audit-tasks.ts**: 47 tasks auditadas (score 53/100, 11 grupos de duplicatas)
+  - ✅ **audit-empresas.ts**: 196 empresas auditadas (score 94/100, 12 sem contato)
+  - ✅ **NPM scripts**: `audit:deals`, `audit:tasks`, `audit:empresas`, `audit:all`
+  - ✅ **Exit codes**: <50 = falha crítica (integração CI/CD)
 - **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI). **[PLANEJADO]**
 
-> **Status atual**: ✅ P1-P5 concluídos | ⏳ P6 pendente | 📋 P7 planejado
+> **Status atual**: ✅ P1-P6 concluídos (90%) | 📋 P7 planejado
 > 
-> **Próximo milestone**: Implementar auditorias de qualidade (P6) para validar integridade dos dados em produção.
+> **Próximo milestone**: Otimizações de performance (P7) para reduzir bundle e melhorar First Contentful Paint.
 
 ---
 
