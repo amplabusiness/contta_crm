@@ -206,7 +206,7 @@ const main = async () => {
     return acc;
   }, {} as Record<string, number>);
   Object.entries(statusDist).forEach(([status, count]) => {
-    const percentage = Math.round((count / indicacoes.length) * 100);
+    const percentage = Math.round((Number(count) / indicacoes.length) * 100);
     console.log(`   ${status}: ${count} (${percentage}%)`);
   });
 

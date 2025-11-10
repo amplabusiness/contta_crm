@@ -240,16 +240,27 @@ export const fetchEmpresasParaIndicar = async (cepOrigem: string): Promise<Empre
 
 // Negócios
 export const fetchDeals = async (): Promise<Deal[]> => {
-    // This now fetches from the real backend API endpoint.
-    // Ensure the Vercel serverless function at /api/deals is created and connected to Supabase as per BACKEND_DOCUMENTATION.md.
     const response = await authorizedFetch('/api/deals');
     if (!response.ok) {
-        // The Negocios.tsx component will catch this error and display a message.
         throw new Error('Falha ao buscar negócios da API. Verifique se o backend está funcionando.');
     }
     const deals: Deal[] = await response.json();
     return deals;
 }
+
+export const createDeal = async (dealData: Omit<Deal, 'id' | 'createdAt'>): Promise<Deal> => {
+    const response = await authorizedFetch('/api/deals', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dealData),
+    });
+    if (!response.ok) {
+        throw new Error('Falha ao criar negócio.');
+    }
+    return await response.json();
+};
 
 export const updateDealStage = async (dealId: string, nextStage: DealStage): Promise<Deal> => {
     const response = await authorizedFetch(`/api/deals/${dealId}`, {
@@ -265,6 +276,15 @@ export const updateDealStage = async (dealId: string, nextStage: DealStage): Pro
     }
 
     return await response.json();
+};
+
+export const deleteDeal = async (dealId: string): Promise<void> => {
+    const response = await authorizedFetch(`/api/deals/${dealId}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) {
+        throw new Error('Falha ao deletar negócio.');
+    }
 };
 
 // Tarefas

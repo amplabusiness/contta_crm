@@ -243,7 +243,7 @@ const main = async () => {
     return acc;
   }, {} as Record<string, number>);
   Object.entries(statusDist).forEach(([status, count]) => {
-    console.log(`   ${status}: ${count} (${Math.round((count / tasks.length) * 100)}%)`);
+    console.log(`   ${status}: ${count} (${Math.round((Number(count) / tasks.length) * 100)}%)`);
   });
 
   console.log('\n🎯 Distribuição de Prioridades:');
@@ -252,7 +252,7 @@ const main = async () => {
     return acc;
   }, {} as Record<string, number>);
   Object.entries(priorityDist).forEach(([priority, count]) => {
-    console.log(`   ${priority}: ${count} (${Math.round((count / tasks.length) * 100)}%)`);
+    console.log(`   ${priority}: ${count} (${Math.round((Number(count) / tasks.length) * 100)}%)`);
   });
 
   console.log('\n📅 Distribuição de Prazos:');

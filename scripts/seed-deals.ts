@@ -262,7 +262,7 @@ const main = async () => {
   }, {} as Record<string, number>);
 
   Object.entries(distribution).forEach(([stage, count]) => {
-    console.log(`   ${stage}: ${count} (${Math.round((count / deals.length) * 100)}%)`);
+    console.log(`   ${stage}: ${count} (${Math.round((Number(count) / deals.length) * 100)}%)`);
   });
 
   console.log('\n💰 Estatísticas de Valor:');
