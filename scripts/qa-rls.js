@@ -1,6 +1,16 @@
 #!/usr/bin/env node
+import { config } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = join(__dirname, '..');
+
+// Carregar .env.local
+config({ path: join(rootDir, '.env.local') });
 
 const requiredEnv = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'VITE_SUPABASE_ANON_KEY'];
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);

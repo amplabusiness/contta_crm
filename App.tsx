@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext.tsx';
+import { supabase } from './services/supabaseClient.ts';
 // FIX: Added file extensions to imports
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -21,6 +22,8 @@ import AnaliseCliente from './components/AnaliseCliente.tsx';
 // FIX: Added file extension to import path.
 import EmpresaDetalhe from './components/EmpresaDetalhe.tsx';
 import LoginView from './components/auth/LoginView.tsx';
+import ForgotPasswordView from './components/auth/ForgotPasswordView.tsx';
+import ResetPasswordView from './components/auth/ResetPasswordView.tsx';
 
 import { Empresa } from './types.ts';
 
@@ -40,11 +43,33 @@ export type View =
   | 'Equipe & Comunicação'
   | 'Admin';
 
+type AuthView = 'login' | 'forgot-password' | 'reset-password';
+
 const App: React.FC = () => {
   const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState<View>('Dashboard');
   const [viewPayload, setViewPayload] = useState<any>(null);
+  const [authView, setAuthView] = useState<AuthView>('login');
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  
+  // 🚧 MODO DEV: Bypass temporário de autenticação
+  const [devMode, setDevMode] = useState(false); // Mude para true se precisar bypass
+
+  // Detectar se o usuário veio de um link de recuperação de senha
+  useEffect(() => {
+    const checkPasswordRecovery = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const type = hashParams.get('type');
+      
+      if (type === 'recovery') {
+        setIsPasswordRecovery(true);
+        setAuthView('reset-password');
+      }
+    };
+
+    checkPasswordRecovery();
+  }, []);
 
   const navigate = useCallback((view: View, payload?: any) => {
     setCurrentView(view);
@@ -98,17 +123,64 @@ const App: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return <LoginView />;
+  if (!user && !devMode) {
+    // Se está em modo de recuperação de senha, mostrar tela de reset
+    if (isPasswordRecovery) {
+      return (
+        <ResetPasswordView 
+          onBackToLogin={() => {
+            setIsPasswordRecovery(false);
+            setAuthView('login');
+            window.location.hash = '';
+          }} 
+        />
+      );
+    }
+
+    // Fluxo normal de autenticação
+    switch (authView) {
+      case 'forgot-password':
+        return <ForgotPasswordView onBackToLogin={() => setAuthView('login')} />;
+      case 'reset-password':
+        return (
+          <ResetPasswordView 
+            onBackToLogin={() => {
+              setAuthView('login');
+              window.location.hash = '';
+            }} 
+          />
+        );
+      case 'login':
+      default:
+        return <LoginView onForgotPassword={() => setAuthView('forgot-password')} />;
+    }
   }
 
-  const displayName =
-    (user.user_metadata as Record<string, any>)?.full_name ||
-    user.email?.split('@')[0] ||
-    'Usuário';
+  // 🚧 MODO DEV: Dados fictícios para bypass de autenticação
+  const displayName = devMode 
+    ? 'Usuário Dev (Modo Teste)'
+    : (user?.user_metadata as Record<string, any>)?.full_name ||
+      user?.email?.split('@')[0] ||
+      'Usuário';
 
-  const organization = (user.user_metadata as Record<string, any>)?.organization ?? 'Contta CRM';
-  const userRole = ((user.user_metadata as Record<string, any>)?.role ?? 'Admin') as string;
+  const organization = devMode 
+    ? 'Contta CRM - Desenvolvimento' 
+    : (user?.user_metadata as Record<string, any>)?.organization ?? 'Contta CRM';
+    
+  const userRole = devMode 
+    ? 'Admin' 
+    : ((user?.user_metadata as Record<string, any>)?.role ?? 'Admin') as string;
+  
+  const userEmail = devMode 
+    ? 'dev@conttacrm.com' 
+    : user?.email ?? '';
+
+  const handleSignOut = devMode 
+    ? () => {
+        setDevMode(false);
+        window.location.reload();
+      }
+    : signOut;
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-200 font-sans">
@@ -126,9 +198,9 @@ const App: React.FC = () => {
           setSidebarOpen={setSidebarOpen}
           navigate={navigate}
           userName={displayName}
-          userEmail={user.email ?? ''}
+          userEmail={userEmail}
           organization={organization}
-          onSignOut={signOut}
+          onSignOut={handleSignOut}
         />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900/95">
           <div className="container mx-auto px-6 py-8">

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { mapProfileToTeamMember } from '../utils/formatters';
+import { mapProfileToTeamMember } from '../utils/formatters.ts';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,

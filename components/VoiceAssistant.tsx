@@ -258,7 +258,11 @@ const VoiceAssistant: React.FC = () => {
                     </div>
 
                     <div className="p-4 border-t border-gray-700 flex flex-col items-center justify-center gap-3">
-                        <button onClick={handleMicClick} className={`w-20 h-20 rounded-full flex items-center justify-center transition-colors ${isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-purple-600 hover:bg-purple-500'}`}>
+                        <button
+                            onClick={handleMicClick}
+                            aria-label={isRecording ? 'Parar gravação' : 'Iniciar gravação'}
+                            aria-pressed={isRecording ? 'true' : 'false'}
+                            className={`w-20 h-20 rounded-full flex items-center justify-center transition-colors ${isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-purple-600 hover:bg-purple-500'}`}>
                             <MicIcon className="w-10 h-10 text-white" />
                         </button>
                         <p className="text-sm text-gray-400 text-center h-4">{statusMessage}</p>

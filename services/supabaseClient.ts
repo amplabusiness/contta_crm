@@ -27,14 +27,20 @@ const resolveEnvValue = (key: string): string | undefined => {
 const supabaseUrl = resolveEnvValue('VITE_SUPABASE_URL');
 const supabaseAnonKey = resolveEnvValue('VITE_SUPABASE_ANON_KEY');
 
+// Debug: verificar se as variáveis foram carregadas
+console.log('🔧 Supabase Config:', {
+  url: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING',
+  anonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING',
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
   const missing = [
     supabaseUrl ? undefined : 'VITE_SUPABASE_URL',
     supabaseAnonKey ? undefined : 'VITE_SUPABASE_ANON_KEY',
   ].filter(Boolean);
 
-  console.warn(
-    `Supabase não configurado: defina ${missing.join(', ')} no .env.local ou nas variáveis do ambiente de build.`,
+  console.error(
+    `❌ Supabase não configurado: defina ${missing.join(', ')} no .env.local ou nas variáveis do ambiente de build.`,
   );
 }
 

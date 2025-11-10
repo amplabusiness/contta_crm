@@ -16,6 +16,7 @@ import { fetchVinculos } from '../services/vinculosService.ts';
 import { fetchGenealogia } from '../services/genealogiaService.ts';
 import { generatePitchFromVinculos } from '../services/geminiService.ts';
 import NetworkNode from './NetworkNode.tsx';
+import GenealogyNetwork from './GenealogyNetwork.tsx';
 import { ArrowLeftIcon, SparkleIcon, ClipboardIcon, CheckCircleIcon } from './icons/Icons.tsx';
 
 interface VinculosProps {
@@ -227,11 +228,18 @@ const SocioConnections: React.FC<{ socio: Socio, empresa: Empresa }> = ({ socio,
 };
 
 const Vinculos: React.FC<VinculosProps> = ({ empresa, navigate }) => {
+    const [showNetworkView, setShowNetworkView] = useState(false);
+    const [networkDegree, setNetworkDegree] = useState(3);
+    
     if (!empresa) {
         return (
             <div className="space-y-6">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('Prospecção')} className="p-2 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
+                    <button 
+                        onClick={() => navigate('Prospecção')} 
+                        className="p-2 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white"
+                        aria-label="Voltar para Prospecção"
+                    >
                         <ArrowLeftIcon className="h-6 w-6" />
                     </button>
                     <h1 className="text-3xl font-bold text-white">Erro</h1>
@@ -248,24 +256,88 @@ const Vinculos: React.FC<VinculosProps> = ({ empresa, navigate }) => {
                     <ArrowLeftIcon className="h-4 w-4" />
                     Voltar para Prospecção
                 </button>
-                <h1 className="text-3xl font-bold text-white">Rede de Vínculos: {empresa.nome_fantasia}</h1>
-                <p className="mt-1 text-gray-400">
-                    Explore as conexões dos sócios para encontrar oportunidades de negócio.
-                </p>
+                
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white">Rede de Vínculos: {empresa.nome_fantasia}</h1>
+                        <p className="mt-1 text-gray-400">
+                            Explore as conexões dos sócios para encontrar oportunidades de negócio.
+                        </p>
+                    </div>
+                    
+                    <button
+                        onClick={() => setShowNetworkView(!showNetworkView)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-4 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg"
+                    >
+                        {showNetworkView ? (
+                            <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                                Vista de Lista
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                                Vista de Rede
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
             
-            <div className="space-y-6">
-                {empresa.quadro_socios.length > 0 ? (
-                    empresa.quadro_socios.map(socio => (
-                        <SocioConnections key={socio.cpf_parcial} socio={socio} empresa={empresa} />
-                    ))
-                ) : (
-                    <div className="text-center p-12 text-gray-500 border-2 border-dashed border-gray-700 rounded-xl mt-6">
-                         <h3 className="text-lg font-semibold text-gray-400">Quadro Societário não disponível.</h3>
-                         <p className="mt-1 text-sm">Não foi possível carregar os sócios desta empresa.</p>
+            {showNetworkView ? (
+                <div className="space-y-4">
+                    {/* Controles de visualização */}
+                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4">
+                        <div className="flex items-center gap-4">
+                            <label htmlFor="network-degree" className="text-sm font-medium text-gray-300">
+                                Profundidade da Rede:
+                            </label>
+                            <select
+                                id="network-degree"
+                                value={networkDegree}
+                                onChange={(e) => setNetworkDegree(Number(e.target.value))}
+                                className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-1.5 text-sm"
+                            >
+                                <option value={1}>1º Grau (Sócios diretos)</option>
+                                <option value={2}>2º Grau (Outras empresas dos sócios)</option>
+                                <option value={3}>3º Grau (Sócios das empresas de 2º grau)</option>
+                                <option value={4}>4º Grau (Rede completa)</option>
+                            </select>
+                            
+                            <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Arraste para mover, scroll para zoom
+                            </div>
+                        </div>
                     </div>
-                )}
-            </div>
+                    
+                    {/* Componente de visualização de rede */}
+                    <GenealogyNetwork 
+                        cnpj={empresa.cnpj}
+                        maxDegree={networkDegree}
+                        autoLayout={true}
+                    />
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {empresa.quadro_socios.length > 0 ? (
+                        empresa.quadro_socios.map(socio => (
+                            <SocioConnections key={socio.cpf_parcial} socio={socio} empresa={empresa} />
+                        ))
+                    ) : (
+                        <div className="text-center p-12 text-gray-500 border-2 border-dashed border-gray-700 rounded-xl mt-6">
+                            <h3 className="text-lg font-semibold text-gray-400">Quadro Societário não disponível.</h3>
+                            <p className="mt-1 text-sm">Não foi possível carregar os sócios desta empresa.</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

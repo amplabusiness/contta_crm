@@ -8,7 +8,11 @@ import {
 } from '../types.ts';
 
 // Initialize the Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+if (!apiKey) {
+  throw new Error('GEMINI_API_KEY não configurado em .env.local');
+}
+const ai = new GoogleGenAI({ apiKey });
 const model = "gemini-2.5-flash";
 
 const safelyParseJson = <T>(jsonString: string): T | null => {
@@ -150,15 +154,6 @@ export const generateCommunication = async (deal: Deal, commType: string, commTo
     return response.text;
 };
 
-export const generateAutomatedReport = async (data: any): Promise<string> => {
-    const prompt = `
-        Com base nos dados a seguir, gere um relatório executivo em HTML (use tags <h2>, <p>, <ul>, <li>, <strong>).
-        Dados: ${JSON.stringify(data)}
-    `;
-    const response = await ai.models.generateContent({ model, contents: prompt });
-    return response.text;
-}
-
 export const analyzeAuditLogs = async (logs: DataAccessLog[]): Promise<string> => {
     const prompt = `
         Analise os seguintes logs de auditoria de acesso a dados. Identifique qualquer padrão incomum, acesso fora do horário comercial, ou atividade suspeita. Forneça um resumo em HTML (use tags <h2>, <p>, <ul>, <li>, <strong>).
@@ -256,3 +251,202 @@ export const getIntelligentSearchParams = async (query: string): Promise<any> =>
     if (!result) throw new Error("Could not parse search params.");
     return result;
 };
+
+// ============================================================================
+// ANALYTICS COM IA - Agentes Autônomos
+// ============================================================================
+
+/**
+ * Analisa risco de churn de um cliente usando Gemini AI
+ * 
+ * @param dealData - Dados do deal + métricas de engajamento
+ * @returns Análise de risco com score, razão e ação sugerida
+ */
+export async function analyzeChurnRisk(dealData: {
+  company_name: string;
+  deal_value: number;
+  days_since_last_activity: number;
+  task_completion_rate: number;
+  total_tasks: number;
+  deal_stage: string;
+  contact_email: string | null;
+}): Promise<{
+  risk_score: number;
+  primary_reason: string;
+  suggested_action: string;
+}> {
+  const prompt = `
+## IDENTIDADE
+Você é um analista de Customer Success especializado em predição de churn B2B.
+
+## MISSÃO
+Analisar dados de engajamento e prever risco de churn (0-100).
+
+## REGRAS DE ANÁLISE
+1. Risco ALTO (70-100): Sem atividade há >60 dias OU taxa de conclusão <30%
+2. Risco MÉDIO (40-69): Atividade irregular OU taxa conclusão 30-60%
+3. Risco BAIXO (0-39): Atividade regular E taxa conclusão >60%
+
+## DADOS DO CLIENTE
+${JSON.stringify(dealData, null, 2)}
+
+## OUTPUT (JSON)
+{
+  "risk_score": number (0-100),
+  "primary_reason": "string (máx 100 chars)",
+  "suggested_action": "string (ação específica e executável)"
+}
+  `.trim();
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: { responseMimeType: 'application/json' }
+  });
+
+  const result = safelyParseJson<{
+    risk_score: number;
+    primary_reason: string;
+    suggested_action: string;
+  }>(response.text);
+
+  if (!result) {
+    throw new Error('Falha ao parsear análise de churn');
+  }
+
+  return result;
+}
+
+/**
+ * Identifica oportunidades de upsell/cross-sell usando Gemini AI
+ * 
+ * @param dealData - Dados do deal + histórico de uso
+ * @returns Análise de oportunidade com tipo, produto, confiança e valor potencial
+ */
+export async function analyzeUpsellOpportunity(dealData: {
+  company_name: string;
+  current_value: number;
+  deal_stage: string;
+  services_used?: string[];
+  company_size?: string;
+  industry?: string;
+}): Promise<{
+  opportunity_type: 'Upsell' | 'Cross-sell';
+  product_suggestion: string;
+  confidence: number;
+  potential_value: number;
+}> {
+  const prompt = `
+## IDENTIDADE
+Você é um especialista em vendas consultivas para escritórios de contabilidade.
+
+## MISSÃO
+Identificar oportunidades de expansão de receita.
+
+## SERVIÇOS DISPONÍVEIS
+1. Contabilidade Básica (R$ 500-2.000/mês)
+2. Folha de Pagamento (R$ 300-1.500/mês)
+3. Assessoria Fiscal (R$ 800-3.000/mês)
+4. BPO Financeiro (R$ 1.500-5.000/mês)
+5. Planejamento Tributário (R$ 2.000-8.000/mês)
+6. Compliance & Auditoria (R$ 3.000-10.000/mês)
+
+## DADOS DO CLIENTE
+${JSON.stringify(dealData, null, 2)}
+
+## OUTPUT (JSON)
+{
+  "opportunity_type": "Upsell" ou "Cross-sell",
+  "product_suggestion": "string (nome do serviço + benefício chave)",
+  "confidence": number (0-100),
+  "potential_value": number (valor mensal estimado em R$)
+}
+  `.trim();
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: { responseMimeType: 'application/json' }
+  });
+
+  const result = safelyParseJson<{
+    opportunity_type: 'Upsell' | 'Cross-sell';
+    product_suggestion: string;
+    confidence: number;
+    potential_value: number;
+  }>(response.text);
+
+  if (!result) {
+    throw new Error('Falha ao parsear análise de upsell');
+  }
+
+  return result;
+}
+
+/**
+ * Gera relatório automatizado com insights de negócio usando Gemini AI
+ * 
+ * @param analyticsData - Dados agregados de vendas, deals, tasks
+ * @returns Relatório com título, sumário e timestamp
+ */
+export async function generateAutomatedReport(analyticsData: {
+  total_deals: number;
+  total_value: number;
+  won_deals: number;
+  lost_deals: number;
+  avg_deal_value: number;
+  top_cnae?: string;
+  conversion_rate: number;
+  period: string;
+}): Promise<{
+  title: string;
+  summary: string;
+  generatedAt: string;
+}> {
+  const prompt = `
+## IDENTIDADE
+Você é um analista de BI especializado em CRM para contadores.
+
+## MISSÃO
+Gerar relatório executivo em português com insights acionáveis.
+
+## DADOS DO PERÍODO (${analyticsData.period})
+${JSON.stringify(analyticsData, null, 2)}
+
+## ESTRUTURA DO RELATÓRIO
+1. Título: curto e impactante (ex: "Crescimento de 25% em Vendas - Jan/2025")
+2. Sumário: 3-5 parágrafos com:
+   - Performance geral (deals ganhos vs perdidos)
+   - Análise de valor médio
+   - Taxa de conversão e tendências
+   - Recomendações específicas (mínimo 2)
+
+## OUTPUT (JSON)
+{
+  "title": "string (máx 80 chars)",
+  "summary": "string (HTML permitido: <p>, <strong>, <ul>, <li>)",
+  "generatedAt": "${new Date().toISOString()}"
+}
+  `.trim();
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: { responseMimeType: 'application/json' }
+  });
+
+  const result = safelyParseJson<{
+    title: string;
+    summary: string;
+    generatedAt: string;
+  }>(response.text);
+
+  if (!result) {
+    throw new Error('Falha ao parsear relatório automatizado');
+  }
+
+  return {
+    ...result,
+    generatedAt: new Date().toISOString() // Garantir timestamp correto
+  };
+}

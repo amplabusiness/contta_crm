@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 
-const LoginView: React.FC = () => {
+interface LoginViewProps {
+  onForgotPassword?: () => void;
+}
+
+const LoginView: React.FC<LoginViewProps> = ({ onForgotPassword }) => {
   const { signInWithPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -88,6 +92,18 @@ const LoginView: React.FC = () => {
             {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+
+        {onForgotPassword && (
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-sm text-indigo-400 hover:text-indigo-300 transition"
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+        )}
 
         <p className="mt-8 text-center text-xs text-gray-500">
           Dica: defina usuários e credenciais no painel do Supabase → Authentication → Users.
