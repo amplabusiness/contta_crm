@@ -24,19 +24,25 @@
 - **CNPJUtils**: 6 métodos utilitários para trabalhar com estrutura CNPJ
 - **Troubleshooting**: Erros comuns + soluções
 
-**Progresso Geral**: 🟢 **65% Concluído** | 🟡 **25% Em Andamento** | ⚪ **10% Pendente**
+**Progresso Geral**: 🟢 **75% Concluído** | 🟡 **20% Em Andamento** | ⚪ **5% Pendente**
 
 ### 🚀 Prioridades Imediatas (Novembro 2025)
 
-- **P1 · Operacionalizar dados core**: Mapear com Ampla Contabilidade Ltda. e Sérgio Carneiro Leão as fontes de dados reais para `deals`, `tasks` e `indicacoes`, incluindo definição de campos obrigatórios, gatilhos e periodicidade de atualização.
-- **P2 · Backend real-time**: Implementar endpoints Supabase/Vercel (`GET/POST/PUT/PATCH`) para `deals`, `tasks` e `indicacoes`, substituindo mocks e garantindo autenticação via Supabase Auth.
-- **P3 · Seed inicial confiável**: Criar scripts de seed/ingestão (Node + Supabase) que importem dados reais ou curadoria inicial, removendo mocks atuais do front.
-- **P4 · Sincronização front**: Atualizar hooks/serviços (`services/apiService.ts`, `services/vinculosService.ts`, etc.) e componentes (`Negocios`, `Tarefas`, `Indicacoes`, dashboards) para consumir os novos endpoints e refletir KPIs corretos.
-- **P5 · Rotina contínua**: Documentar e automatizar (cron/queue) as rotinas de atualização diária do importador CNPJá, revisão semanal de tarefas e geração de ordens de serviço para casos de natureza jurídica 213-5 (migração para SLU).
-- **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias).
-- **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI).
+- ✅ **P1 · Operacionalizar dados core**: Mapear com Ampla Contabilidade Ltda. e Sérgio Carneiro Leão as fontes de dados reais para `deals`, `tasks` e `indicacoes`, incluindo definição de campos obrigatórios, gatilhos e periodicidade de atualização. **[CONCLUÍDO]**
+- ✅ **P2 · Backend real-time**: Implementar endpoints Supabase/Vercel (`GET/POST/PUT/PATCH`) para `deals`, `tasks` e `indicacoes`, substituindo mocks e garantindo autenticação via Supabase Auth. **[CONCLUÍDO]**
+- ✅ **P3 · Seed inicial confiável**: Criar scripts de seed/ingestão (Node + Supabase) que importem dados reais ou curadoria inicial, removendo mocks atuais do front. **[CONCLUÍDO em 10/11/2025]**
+  - ✅ `scripts/seed-deals.ts`: 25 negócios (R$ 187K total, média R$ 7.5K)
+  - ✅ `scripts/seed-tasks.ts`: 45 tarefas (49% pendente, 24% em andamento, 27% concluído)
+  - ✅ `scripts/seed-indicacoes.ts`: 18 indicações (56% convertidas, R$ 1.950 em recompensas)
+  - ✅ NPM scripts: `seed:deals`, `seed:tasks`, `seed:indicacoes`, `seed:all`
+- 🔄 **P4 · Sincronização front**: Atualizar hooks/serviços (`services/apiService.ts`, `services/vinculosService.ts`, etc.) e componentes (`Negocios`, `Tarefas`, `Indicacoes`, dashboards) para consumir os novos endpoints e refletir KPIs corretos. **[EM ANDAMENTO]**
+- **P5 · Rotina contínua**: Documentar e automatizar (cron/queue) as rotinas de atualização diária do importador CNPJá, revisão semanal de tarefas e geração de ordens de serviço para casos de natureza jurídica 213-5 (migração para SLU). **[PENDENTE]**
+- **P6 · Qualidade & validação**: Adicionar auditorias (`scripts/audit-genealogy.ts`, novos `audit-deals.ts`, `audit-tasks.ts`) e dashboards que sinalizem lacunas (ex.: tasks vazias, indicadores sem atualização ≥7 dias). **[PENDENTE]**
+- **P7 · Otimizações de Performance** (não urgente): Implementar code-splitting com `dynamic import()` para reduzir bundle inicial de 1.27 MB. Considerar lazy loading de componentes pesados (React Flow, Recharts, Gemini AI). **[PLANEJADO]**
 
-> **Ordem de execução recomendada**: P1 → P2 → P3 → P4 → P5 → P6. P7 pode ser executada após deploy inicial. Cada etapa deve gerar commit + auditoria MCP antes de avançar.
+> **Status atual**: ✅ P1-P3 concluídos | 🔄 P4 em andamento | ⏳ P5-P6 pendentes | 📋 P7 planejado
+> 
+> **Próximo milestone**: Sincronizar frontend com backend (P4) para remover mocks e habilitar CRUD real em todos os módulos.
 
 ---
 
@@ -3289,9 +3295,39 @@ npx artillery quick --count 100 --num 10 https://contta-crm.vercel.app
 
 ## 📝 Log de Mudanças
 
-| Data | Fase | Descrição |
-|------|------|-----------|
-| 2025-11-09 | Setup | Criação do plano de produção |
+| Data | Fase | Descrição | Status |
+|------|------|-----------|--------|
+| 2025-11-09 | Setup | Criação do plano de produção | ✅ |
+| 2025-11-09 | P1 | Definição de estrutura de dados (deals, tasks, indicacoes) | ✅ |
+| 2025-11-09 | P2 | Implementação de endpoints backend `/api/deals`, `/api/tasks`, `/api/indicacoes` | ✅ |
+| 2025-11-09 | Lint | Configuração ESLint v9 com flat config + correção de 10 erros críticos | ✅ |
+| 2025-11-09 | Build | Type-check e build validados (0 erros, bundle 1.27 MB) | ✅ |
+| 2025-11-10 | P3 | **Criação de scripts de seed realistas** | ✅ |
+| 2025-11-10 | P3 | `scripts/seed-deals.ts` - 25 negócios (R$ 187K total) | ✅ |
+| 2025-11-10 | P3 | `scripts/seed-tasks.ts` - 45 tarefas vinculadas a deals | ✅ |
+| 2025-11-10 | P3 | `scripts/seed-indicacoes.ts` - 18 indicações com recompensas | ✅ |
+| 2025-11-10 | P3 | Execução bem-sucedida: 88 registros inseridos no Supabase | ✅ |
+| 2025-11-10 | P4 | **Sincronização frontend iniciada** | 🔄 |
+
+### 📊 Estatísticas de Implementação
+
+**Commits realizados**: 2
+1. `feat: configure ESLint v9 with flat config and fix critical errors` (19 arquivos, 3.997 linhas)
+2. `feat(P3): create seed scripts for deals, tasks and indicacoes` (4 arquivos, 917 linhas)
+
+**Scripts criados**: 3
+- `seed-deals.ts` (380 linhas) - Geração de 25 deals realistas com distribuição por estágios
+- `seed-tasks.ts` (340 linhas) - Geração de 45 tasks com prioridades e status variados
+- `seed-indicacoes.ts` (290 linhas) - Geração de 18 indicações com cálculo de recompensas
+
+**Dados populados no Supabase**:
+- 25 deals (valor total R$ 187.588, média R$ 7.504)
+- 45 tasks (22 pendentes, 11 em andamento, 12 concluídas, 4 atrasadas)
+- 18 indicações (10 convertidas, 7 em negociação, 1 rejeitada, R$ 1.950 em recompensas)
+
+**Próxima etapa**: P4 - Remover mocks do `services/apiService.ts` e conectar componentes React aos endpoints reais
+
+---
 | ... | ... | ... |
 
 ---
