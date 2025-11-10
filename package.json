@@ -16,7 +16,11 @@
     "test:logging": "tsx scripts/test-logging.js",
     "qa:supabase": "node scripts/qa-queries.js",
     "qa:rls": "node scripts/qa-rls.js",
-    "seed:demo": "node scripts/seed-demo-data.js"
+    "seed:demo": "node scripts/seed-demo-data.js",
+    "seed:deals": "tsx scripts/seed-deals.ts",
+    "seed:tasks": "tsx scripts/seed-tasks.ts",
+    "seed:indicacoes": "tsx scripts/seed-indicacoes.ts",
+    "seed:all": "npm run seed:deals && npm run seed:tasks && npm run seed:indicacoes"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
