@@ -50,11 +50,6 @@ const RECOMPENSA_POR_PORTE: Record<string, { bronze: number; prata: number; ouro
   'GRANDE': { bronze: 300, prata: 600, ouro: 1200, platina: 2000 },
 };
 
-// Naturezas jurídicas que requerem migração para SLU (213-5)
-const NATUREZAS_2135 = [
-  '213-5', // Empresa Individual de Responsabilidade Limitada (EIRELI)
-];
-
 // Templates de empresas para indicação
 const EMPRESA_TEMPLATES = [
   { nome: 'Inovação Tech Soluções LTDA', porte: 'ME', natureza: '206-2' },
@@ -159,7 +154,6 @@ const generateIndicacoes = async (count: number = 18) => {
     const porte = template.porte;
     const recompensaGanha = calcularRecompensa(porte, status);
     const dataIndicacao = generateDataIndicacao(status);
-    const requiresMigration2135 = NATUREZAS_2135.includes(template.natureza);
     
     // Tentar vincular empresa real se disponível
     const empresa = empresas && empresas.length > i ? empresas[i] : null;
