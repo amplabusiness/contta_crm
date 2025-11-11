@@ -1,2 +1,2 @@
-export { default } from './deals/index.ts';
+export { default } from './deals/index';
 
