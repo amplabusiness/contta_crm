@@ -2211,6 +2211,12 @@ const cnpj = validateCnpj(request.query.cnpj as string);
 - [ ] Time treinado em boas práticas
 
 ---
+
+#### 1.1 Reduzir avisos do ESLint
+- [ ] Reduzir avisos do ESLint para abaixo de 80 (hoje estão em 41)
+- **Responsável**: Equipe de Frontend
+- **Prazo**: 29/11/2025
+
 - [ ] Verificar se já chama endpoint real ou retorna mock
 - [ ] Mapear para endpoint em `api/` correspondente
 - [ ] Identificar gaps (funções sem backend implementado)
@@ -2236,6 +2242,13 @@ fetchDashboardData() → GET /api/dashboard-data
 - [ ] Validar que `tsconfig.json` paths estão corretos
 
 ### 🧪 Testes Fase 1
+
+#### Ordem para Execução Automatizada (Agente IA)
+1. Rodar `npm run lint` para verificar evolução dos avisos.
+2. Executar `npm run build` e registrar qualquer falha de compilação.
+3. Rodar `npx tsc --noEmit --strict` para validar tipos sem emitir artefatos.
+4. Executar buscas direcionadas (ex.: `grep -r "mockData" src/ components/ services/`) quando houver alteração relevante.
+
 ```bash
 # Compilação limpa
 npm run build

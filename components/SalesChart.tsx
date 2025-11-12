@@ -1,7 +1,5 @@
-
-
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, type TooltipProps } from 'recharts';
 // FIX: Added file extension to import path.
 import { SalesData } from '../types.ts';
 
@@ -9,17 +7,42 @@ interface SalesChartProps {
   data: SalesData[];
 }
 
-const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-gray-800 border border-gray-600 p-3 rounded-lg shadow-xl">
-        <p className="label font-bold text-white">{`${label}`}</p>
-        <p className="text-blue-400">{`Sales: ${payload[0].value}`}</p>
-        <p className="text-indigo-400">{`Revenue: $${payload[1].value}`}</p>
-      </div>
-    );
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+
+const resolveNumericValue = (
+  value: number | string | Array<number | string> | undefined,
+): number => {
+  if (typeof value === 'number') {
+    return value;
   }
-  return null;
+
+  if (Array.isArray(value)) {
+    const [first] = value;
+    const parsed = Number(first);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const [salesPoint, revenuePoint] = payload;
+  const salesValue = resolveNumericValue(salesPoint?.value);
+  const revenueValue = resolveNumericValue(revenuePoint?.value);
+
+  return (
+    <div className="bg-gray-800 border border-gray-600 p-3 rounded-lg shadow-xl">
+      <p className="label font-bold text-white">{label}</p>
+      <p className="text-blue-400">Sales: {salesValue}</p>
+      <p className="text-indigo-400">Revenue: {formatCurrency(revenueValue)}</p>
+    </div>
+  );
 };
 
 const SalesChart: React.FC<SalesChartProps> = ({ data }) => {

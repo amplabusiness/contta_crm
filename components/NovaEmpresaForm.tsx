@@ -1,10 +1,41 @@
 import React, { useState } from 'react';
 import CNPJInput from './CNPJInput';
 import { supabase } from '../services/supabaseClient';
+import type { EmpresaData, Socio } from '../hooks/useCNPJLookup';
+
+interface IndicacaoInsertResponse {
+  id?: string;
+  cnpj?: string | null;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  cnae_principal?: string | null;
+  porte?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  observacoes?: string | null;
+  status?: string | null;
+  usuario_id?: string | null;
+  fonte?: string | null;
+  created_at?: string | null;
+  [key: string]: unknown;
+}
 
 interface NovaEmpresaFormProps {
-  onSuccess?: (empresa: any) => void;
+  onSuccess?: (empresa: IndicacaoInsertResponse) => void;
   onCancel?: () => void;
+}
+
+interface EmpresaFormState {
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia: string;
+  cnae_principal: string;
+  descricao_cnae: string;
+  porte_empresa: string;
+  situacao_cadastral: string;
+  telefone: string;
+  email: string;
+  observacoes: string;
 }
 
 /**
@@ -18,7 +49,7 @@ interface NovaEmpresaFormProps {
  * 5. Salva como indicação/prospect
  */
 export default function NovaEmpresaForm({ onSuccess, onCancel }: NovaEmpresaFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<EmpresaFormState>({
     cnpj: '',
     razao_social: '',
     nome_fantasia: '',
@@ -31,12 +62,12 @@ export default function NovaEmpresaForm({ onSuccess, onCancel }: NovaEmpresaForm
     observacoes: ''
   });
 
-  const [socios, setSocios] = useState<any[]>([]);
+  const [socios, setSocios] = useState<Socio[]>([]);
   const [saving, setSaving] = useState(false);
   const [autoFilled, setAutoFilled] = useState(false);
 
   // Callback quando CNPJ é encontrado
-  const handleEmpresaLoaded = (empresa: any, sociosData: any[]) => {
+  const handleEmpresaLoaded = (empresa: EmpresaData, sociosData: Socio[]) => {
     console.log('✅ Empresa carregada:', empresa);
     
     setFormData({
@@ -61,7 +92,7 @@ export default function NovaEmpresaForm({ onSuccess, onCancel }: NovaEmpresaForm
     setAutoFilled(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!formData.cnpj || !formData.razao_social) {
@@ -103,8 +134,8 @@ export default function NovaEmpresaForm({ onSuccess, onCancel }: NovaEmpresaForm
       console.log('✅ Indicação criada:', indicacao);
 
       // Notificar sucesso
-      if (onSuccess) {
-        onSuccess(indicacao);
+      if (onSuccess && indicacao) {
+        onSuccess(indicacao as IndicacaoInsertResponse);
       }
 
       // Limpar formulário
@@ -125,8 +156,8 @@ export default function NovaEmpresaForm({ onSuccess, onCancel }: NovaEmpresaForm
 
       alert('✅ Empresa cadastrada com sucesso!');
 
-    } catch (error) {
-      console.error('❌ Erro ao salvar:', error);
+    } catch (err) {
+      console.error('❌ Erro ao salvar:', err);
       alert('Erro ao salvar empresa. Tente novamente.');
     } finally {
       setSaving(false);
