@@ -2,14 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 // FIX: Added file extensions to import paths.
 import { fetchProspectCompanies } from '../services/apiService.ts';
 import { getCoordinatesForCep, calculateDistance } from '../services/geolocationService.ts';
-import { Empresa } from '../types.ts';
+import { Empresa, NavigateFn } from '../types.ts';
 import EmpresaCard from './EmpresaCard.tsx';
 import Pagination from './Pagination.tsx';
 import { SearchIcon, MapPinIcon } from './icons/Icons.tsx';
-import { View } from '../App.tsx';
 
 interface ProspeccaoProps {
-    navigate: (view: View, payload?: any) => void;
+    navigate: NavigateFn;
 }
 
 const ESCRITORIO_CEP = '04551-010'; 

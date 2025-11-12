@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateAutomatedReport } from '../services/geminiService.ts';
 import {
   computeDashboardMetrics,
   type DealRecord,
@@ -82,11 +81,11 @@ export default async function handler(
       ...metrics,
       insightsHtml,
     });
-  } catch (rawError: any) {
-    const error = rawError ?? {};
-    const status = typeof error.status === 'number' ? error.status : 500;
-    const message = error.message || 'Internal server error';
-    console.error('Error in dashboard-data API:', error);
+  } catch (rawError: unknown) {
+    const fallback = (rawError ?? {}) as { status?: number; message?: string };
+    const status = typeof fallback.status === 'number' ? fallback.status : 500;
+    const message = fallback.message || 'Internal server error';
+    console.error('Error in dashboard-data API:', rawError);
     response.status(status).json({ message });
   }
 }

@@ -43,8 +43,12 @@ const VoiceAssistant: React.FC = () => {
     const [transcription, setTranscription] = useState<TranscriptionPart[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     
-    // FIX: Replaced 'LiveSession' with 'any' as the type is not exported from the library.
-    const sessionPromiseRef = useRef<Promise<any> | null>(null);
+    type GeminiLiveSession = {
+        close: () => Promise<void> | void;
+        sendRealtimeInput: (payload: { media: Blob }) => Promise<void> | void;
+    };
+
+    const sessionPromiseRef = useRef<Promise<GeminiLiveSession> | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);

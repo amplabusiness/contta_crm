@@ -1,10 +1,10 @@
 import React from 'react';
-import { useAutoCNPJLookup } from '../hooks/useCNPJLookup';
+import { useAutoCNPJLookup, type EmpresaData, type Socio } from '../hooks/useCNPJLookup';
 import { useCNPJGroup } from '../hooks/useCNPJGroup';
 import CNPJGroupDisplay from './CNPJGroupDisplay';
 
 interface CNPJInputProps {
-  onEmpresaLoaded?: (empresa: any, socios: any[]) => void;
+  onEmpresaLoaded?: (empresa: EmpresaData, socios: Socio[]) => void;
   onError?: (error: string) => void;
   className?: string;
   placeholder?: string;
@@ -54,7 +54,7 @@ export default function CNPJInput({
     isFromCache
   } = useAutoCNPJLookup();
 
-  const { grupo, loading: groupLoading, findGroup } = useCNPJGroup();
+  const { grupo, findGroup } = useCNPJGroup();
 
   // Notificar parent quando dados carregados
   React.useEffect(() => {

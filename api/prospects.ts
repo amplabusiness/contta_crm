@@ -42,10 +42,69 @@ export const EMPRESA_SELECT = `
     percentual_capital,
     socio:socio_cpf_parcial (
       cpf_parcial,
-      nome_socio
+      nome_socio,
+      data_nascimento,
+      cpf_completo
     )
   )
 `;
+
+type RawSocioRelation =
+  | {
+      cpf_parcial?: string | null;
+      nome_socio?: string | null;
+      data_nascimento?: string | null;
+      cpf_completo?: string | null;
+    }
+  | Array<{
+      cpf_parcial?: string | null;
+      nome_socio?: string | null;
+      data_nascimento?: string | null;
+      cpf_completo?: string | null;
+    }>;
+
+type RawEmpresaSocio = {
+  qualificacao?: string | null;
+  percentual_capital?: number | string | null;
+  socio?: RawSocioRelation | null;
+};
+
+type RawEmpresaRecord = {
+  cnpj: string;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  situacao_cadastral?: string | null;
+  data_abertura?: string | null;
+  porte?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  cnae_principal_codigo?: string | null;
+  cnae_principal_descricao?: string | null;
+  telefones?: string[] | null;
+  emails?: string[] | null;
+  documentos?: unknown[] | null;
+  empresa_socios?: RawEmpresaSocio[] | null;
+};
+
+type IncomingSocio = {
+  cpf_parcial: string;
+  nome_socio: string;
+  data_nascimento?: string | null;
+  cpf_completo?: string | null;
+  qualificacao?: string;
+  percentual_capital?: number;
+};
+
+type IncomingEmpresa = {
+  cnpj: string;
+  quadro_socios?: IncomingSocio[];
+};
 
 const sanitizeNumber = (value: unknown): number | null => {
   if (value === null || value === undefined) {
@@ -55,7 +114,7 @@ const sanitizeNumber = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const mapEmpresaRecord = (record: any) => ({
+export const mapEmpresaRecord = (record: RawEmpresaRecord) => ({
   cnpj: record.cnpj,
   razao_social: record.razao_social ?? '',
   nome_fantasia: record.nome_fantasia ?? '',
@@ -76,30 +135,82 @@ export const mapEmpresaRecord = (record: any) => ({
     codigo: record.cnae_principal_codigo ?? '',
     descricao: record.cnae_principal_descricao ?? '',
   },
-  quadro_socios: (record.empresa_socios ?? []).map((item: any) => ({
-    nome_socio: item.socio?.nome_socio ?? '',
-    cpf_parcial: item.socio?.cpf_parcial ?? '',
-    qualificacao: item.qualificacao ?? '',
-    percentual_capital: Number(item.percentual_capital ?? 0),
-  })),
+  quadro_socios: (record.empresa_socios ?? []).map((item) => {
+    const socioData = Array.isArray(item.socio) ? item.socio[0] : item.socio;
+
+    return {
+      nome_socio: socioData?.nome_socio ?? '',
+      cpf_parcial: socioData?.cpf_parcial ?? '',
+      qualificacao: item.qualificacao ?? '',
+      percentual_capital: Number(item.percentual_capital ?? 0),
+      data_nascimento: socioData?.data_nascimento ?? null,
+      cpf_completo: socioData?.cpf_completo ?? null,
+    };
+  }),
   telefones: record.telefones ?? [],
   emails: record.emails ?? [],
   documentos: record.documentos ?? [],
 });
 
-const upsertSocios = async (empresa: any) => {
+const upsertSocios = async (empresa: IncomingEmpresa) => {
   if (!empresa.quadro_socios || empresa.quadro_socios.length === 0) {
     return;
   }
 
+  const normalizeDate = (value: unknown): string | null => {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().split('T')[0];
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        return null;
+      }
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+
+      const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (brMatch) {
+        return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+      }
+
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    }
+
+    return null;
+  };
+
+  const sanitizeCpf = (value: unknown): string | null => {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const digits = value.replace(/\D+/g, '');
+
+    return digits.length === 11 ? digits : null;
+  };
+
   await Promise.all(
-    empresa.quadro_socios.map(async (socio: any) => {
+    empresa.quadro_socios.map(async (socio) => {
       await supabase
         .from('socios')
         .upsert(
           {
             cpf_parcial: socio.cpf_parcial,
             nome_socio: socio.nome_socio,
+            data_nascimento: normalizeDate(socio.data_nascimento),
+            cpf_completo: sanitizeCpf(socio.cpf_completo),
           },
           {
             onConflict: 'cpf_parcial',
@@ -174,7 +285,8 @@ export default async function handler(
         response.setHeader('X-Total-Count', String(count));
       }
 
-      response.status(200).json((data ?? []).map(mapEmpresaRecord));
+  const mappedRecords = (data ?? []).map((record) => mapEmpresaRecord(record as RawEmpresaRecord));
+  response.status(200).json(mappedRecords);
       return;
     }
 
@@ -239,7 +351,7 @@ export default async function handler(
         }
       }
 
-      response.status(201).json(mapEmpresaRecord(finalRecord));
+  response.status(201).json(mapEmpresaRecord(finalRecord as RawEmpresaRecord));
       return;
     }
 
@@ -265,11 +377,11 @@ export default async function handler(
     }
 
     response.status(405).json({ message: 'Method not allowed' });
-  } catch (rawError: any) {
-    const error = rawError ?? {};
+  } catch (rawError: unknown) {
+    const error = (rawError ?? {}) as { status?: number; message?: string };
     const status = typeof error.status === 'number' ? error.status : 500;
     const message = error.message || 'Internal server error';
-    console.error('Error in prospects API:', error);
+    console.error('Error in prospects API:', rawError);
     response.status(status).json({ message });
   }
 }

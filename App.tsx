@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext.tsx';
-import { supabase } from './services/supabaseClient.ts';
 // FIX: Added file extensions to imports
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -26,23 +25,7 @@ const VoiceAssistant = lazy(() => import('./components/VoiceAssistant.tsx'));
 const AnaliseCliente = lazy(() => import('./components/AnaliseCliente.tsx'));
 const EmpresaDetalhe = lazy(() => import('./components/EmpresaDetalhe.tsx'));
 
-import { Empresa } from './types.ts';
-
-export type View =
-  | 'Dashboard'
-  | 'Prospecção'
-  | 'Negócios'
-  | 'Tarefas'
-  | 'Análises'
-  | 'Análise de Cliente'
-  | 'Indicações'
-  | 'Compliance'
-  | 'Pesquisa de Mercado'
-  | 'Editor de Imagens'
-  | 'Vínculos'
-  | 'Empresa Detalhe'
-  | 'Equipe & Comunicação'
-  | 'Admin';
+import { Empresa, NavigateFn, View, UserRole } from './types.ts';
 
 type AuthView = 'login' | 'forgot-password' | 'reset-password';
 
@@ -50,7 +33,7 @@ const App: React.FC = () => {
   const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentView, setCurrentView] = useState<View>('Dashboard');
-  const [viewPayload, setViewPayload] = useState<any>(null);
+  const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   
@@ -72,9 +55,13 @@ const App: React.FC = () => {
     checkPasswordRecovery();
   }, []);
 
-  const navigate = useCallback((view: View, payload?: any) => {
+  const navigate = useCallback<NavigateFn>((view, payload) => {
     setCurrentView(view);
-    setViewPayload(payload);
+    if (view === 'Empresa Detalhe' || view === 'Vínculos') {
+      setSelectedEmpresa(payload ?? null);
+    } else {
+      setSelectedEmpresa(null);
+    }
     window.scrollTo(0, 0);
   }, []);
 
@@ -85,9 +72,23 @@ const App: React.FC = () => {
       case 'Prospecção':
         return <Prospeccao navigate={navigate} />;
       case 'Vínculos':
-        return <Vinculos empresa={viewPayload as Empresa} navigate={navigate} />;
+        if (!selectedEmpresa) {
+          return (
+            <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-6 text-center text-gray-300">
+              Selecione uma empresa para visualizar os vínculos.
+            </div>
+          );
+        }
+        return <Vinculos empresa={selectedEmpresa} navigate={navigate} />;
       case 'Empresa Detalhe':
-        return <EmpresaDetalhe empresa={viewPayload as Empresa} navigate={navigate} />;
+        if (!selectedEmpresa) {
+          return (
+            <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-6 text-center text-gray-300">
+              Selecione uma empresa para ver os detalhes.
+            </div>
+          );
+        }
+        return <EmpresaDetalhe empresa={selectedEmpresa} navigate={navigate} />;
       case 'Análise de Cliente':
         return <AnaliseCliente />;
       case 'Editor de Imagens':
@@ -158,22 +159,32 @@ const App: React.FC = () => {
   }
 
   // 🚧 MODO DEV: Dados fictícios para bypass de autenticação
-  const displayName = devMode 
-    ? 'Usuário Dev (Modo Teste)'
-    : (user?.user_metadata as Record<string, any>)?.full_name ||
-      user?.email?.split('@')[0] ||
-      'Usuário';
+  const metadataRecord: Record<string, unknown> =
+    user && typeof user.user_metadata === 'object' && user.user_metadata !== null
+      ? (user.user_metadata as Record<string, unknown>)
+      : {};
 
-  const organization = devMode 
-    ? 'Contta CRM - Desenvolvimento' 
-    : (user?.user_metadata as Record<string, any>)?.organization ?? 'Contta CRM';
-    
-  const userRole = devMode 
-    ? 'Admin' 
-    : ((user?.user_metadata as Record<string, any>)?.role ?? 'Admin') as string;
-  
-  const userEmail = devMode 
-    ? 'dev@conttacrm.com' 
+  const getMetadataString = (key: 'full_name' | 'organization' | 'role'): string | undefined => {
+    const value = metadataRecord[key];
+    return typeof value === 'string' ? value : undefined;
+  };
+
+  const displayName = devMode
+    ? 'Usuário Dev (Modo Teste)'
+    : getMetadataString('full_name') ?? user?.email?.split('@')[0] ?? 'Usuário';
+
+  const organization = devMode
+    ? 'Contta CRM - Desenvolvimento'
+    : getMetadataString('organization') ?? 'Contta CRM';
+
+  const userRole: UserRole = devMode
+    ? 'Admin'
+    : getMetadataString('role') === 'User'
+      ? 'User'
+      : 'Admin';
+
+  const userEmail = devMode
+    ? 'dev@conttacrm.com'
     : user?.email ?? '';
 
   const handleSignOut = devMode 

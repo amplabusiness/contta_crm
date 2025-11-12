@@ -102,7 +102,7 @@ class RedisAdapter implements CacheAdapter {
 // ============================================================================
 
 class MemoryAdapter implements CacheAdapter {
-  private cache = new Map<string, { data: any; expiresAt: number }>();
+  private cache = new Map<string, { data: unknown; expiresAt: number }>();
   private metrics: Omit<CacheMetrics, 'hitRate'> = {
     hits: 0,
     misses: 0,
@@ -211,24 +211,41 @@ export async function invalidatePattern(pattern: string): Promise<void> {
 /**
  * Cache warming - pré-carrega dados críticos
  */
-export async function warmCache(keys: Array<{ key: string; fetcher: () => Promise<any>; ttl?: number }>) {
-  console.log(`[Cache] Warming ${keys.length} keys...`);
-  
-  const results = await Promise.allSettled(
-    keys.map(async ({ key, fetcher, ttl }) => {
+type WarmCacheEntry = {
+  key: string;
+  fetcher: () => Promise<unknown>;
+  ttl?: number;
+};
+
+type WarmCacheResult = {
+  key: string;
+  status: 'already-cached' | 'warmed';
+};
+
+export async function warmCache(entries: WarmCacheEntry[]): Promise<void> {
+  console.log(`[Cache] Warming ${entries.length} keys...`);
+
+  const results = await Promise.allSettled<WarmCacheResult>(
+    entries.map(async ({ key, fetcher, ttl }) => {
       const cached = await cache.get(key);
       if (cached) {
-        return { key, status: 'already-cached' };
+        return { key, status: 'already-cached' } as WarmCacheResult;
       }
-      
+
       const data = await fetcher();
       await cache.set(key, data, ttl);
-      return { key, status: 'warmed' };
+      return { key, status: 'warmed' } as WarmCacheResult;
     })
   );
-  
-  const warmed = results.filter(r => r.status === 'fulfilled' && (r.value as any).status === 'warmed').length;
-  console.log(`[Cache] Warmed ${warmed}/${keys.length} keys`);
+
+  const warmed = results.reduce((count, result) => {
+    if (result.status === 'fulfilled' && result.value.status === 'warmed') {
+      return count + 1;
+    }
+    return count;
+  }, 0);
+
+  console.log(`[Cache] Warmed ${warmed}/${entries.length} keys`);
 }
 
 /**

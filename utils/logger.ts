@@ -25,7 +25,7 @@ export interface LogContext {
   method?: string;
   statusCode?: number;
   duration?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface PerformanceTracker {
@@ -379,7 +379,7 @@ export function logBusinessEvent(params: {
   entity: string;
   entityId: string;
   userId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   correlationId?: string;
 }): void {
   logger.info({
@@ -400,37 +400,41 @@ export function logBusinessEvent(params: {
 /**
  * Remove dados sensíveis antes de logar
  */
-export function redactSensitiveData(data: any): any {
-  if (!data || typeof data !== 'object') {
+export function redactSensitiveData<T>(data: T): T {
+  if (data === null || typeof data !== 'object') {
     return data;
   }
-  
+
+  if (Array.isArray(data)) {
+    return data.map((item) => redactSensitiveData(item)) as unknown as T;
+  }
+
   const sensitiveKeys = [
     'password',
     'token',
-    'apiKey',
+    'apikey',
     'secret',
     'authorization',
     'cookie',
-    'creditCard',
+    'creditcard',
     'ssn',
     'cpf',
     'cnpj',
   ];
-  
-  const redacted = { ...data };
-  
+
+  const redacted: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+
   for (const key of Object.keys(redacted)) {
     const lowerKey = key.toLowerCase();
-    
-    if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
+
+    if (sensitiveKeys.some((sensitiveKey) => lowerKey.includes(sensitiveKey))) {
       redacted[key] = '***REDACTED***';
-    } else if (typeof redacted[key] === 'object') {
+    } else {
       redacted[key] = redactSensitiveData(redacted[key]);
     }
   }
-  
-  return redacted;
+
+  return redacted as unknown as T;
 }
 
 // ============================================================================

@@ -27,14 +27,14 @@ export interface SentryContext {
   companyName?: string;
   endpoint?: string;
   method?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SentryBreadcrumb {
   category: string;
   message: string;
   level?: SeverityLevel;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -167,7 +167,7 @@ export function setTags(tags: Record<string, string | number | boolean>): void {
 /**
  * Define contexto adicional
  */
-export function setContext(name: string, context: Record<string, any>): void {
+export function setContext(name: string, context: Record<string, unknown>): void {
   Sentry.setContext(name, context);
 }
 
@@ -280,7 +280,7 @@ export function addHttpBreadcrumb(params: {
   method: string;
   url: string;
   statusCode?: number;
-  data?: any;
+  data?: Record<string, unknown>;
 }): void {
   addBreadcrumb({
     category: 'http',
@@ -414,10 +414,10 @@ export async function flushEvents(timeout = 2000): Promise<boolean> {
  * Wrapper para serverless functions
  * Garante que eventos são enviados antes da function terminar
  */
-export function wrapServerlessHandler<T extends (...args: any[]) => any>(
+export function wrapServerlessHandler<T extends (...args: unknown[]) => Promise<unknown>>(
   handler: T
 ): T {
-  return (async (...args: any[]) => {
+  return (async (...args: Parameters<T>) => {
     try {
       const result = await handler(...args);
       await flushEvents();

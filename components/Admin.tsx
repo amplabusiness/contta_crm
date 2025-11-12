@@ -184,6 +184,7 @@ const Admin: React.FC = () => {
                                                 onChange={(e) => handleRoleChange(member.id, e.target.value as UserRole)}
                                                 className="bg-gray-700 border border-gray-600 rounded-md p-1 focus:ring-indigo-500 focus:border-indigo-500"
                                                 disabled={member.email === 'sergio@amplabusiness.com.br'}
+                                                aria-label={`Alterar função de ${member.name}`}
                                             >
                                                 <option value="Admin">Admin</option>
                                                 <option value="User">User</option>

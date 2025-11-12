@@ -2,22 +2,21 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MenuIcon, SearchIcon, BellIcon, SparkleIcon, BriefcaseIcon, DealsIcon, TasksIcon, XIcon } from './icons/Icons.tsx';
-import { View } from '../App.tsx';
-import { GlobalSearchResults, GlobalSearchResultItem } from '../types.ts';
+import { Empresa, GlobalSearchResults, GlobalSearchResultItem, NavigateFn } from '../types.ts';
 import { getIntelligentSearchParams } from '../services/geminiService.ts';
 import { executeGlobalSearch } from '../services/apiService.ts';
 
 interface HeaderProps {
     sidebarOpen: boolean;
     setSidebarOpen: (open: boolean) => void;
-    navigate: (view: View, payload?: any) => void;
+    navigate: NavigateFn;
     userName: string;
     userEmail: string;
     organization: string;
     onSignOut: () => Promise<void> | void;
 }
 
-const SearchResultItem: React.FC<{ item: GlobalSearchResultItem; icon: React.FC<any>; onClick: () => void }> = ({ item, icon: Icon, onClick }) => (
+const SearchResultItem: React.FC<{ item: GlobalSearchResultItem; icon: React.ComponentType<{ className?: string }>; onClick: () => void }> = ({ item, icon: Icon, onClick }) => (
     <button onClick={onClick} className="w-full text-left flex items-center gap-4 p-3 rounded-lg hover:bg-indigo-600/20 transition-colors">
         <div className="bg-gray-700/50 p-2 rounded-md">
             <Icon className="w-5 h-5 text-gray-300" />
@@ -100,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen, navigate, 
     const handleResultClick = (item: GlobalSearchResultItem) => {
         closeSearch();
         if (item.type === 'client') {
-            navigate('Empresa Detalhe', item.payload);
+            navigate('Empresa Detalhe', item.payload as Empresa);
         } else if (item.type === 'deal') {
             navigate('Negócios');
         } else if (item.type === 'task') {

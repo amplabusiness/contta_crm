@@ -147,7 +147,128 @@ const ensureArray = <T>(value: T[] | T | null | undefined): T[] => {
   return [value as T];
 };
 
-export const mapEmpresaRecordToResponse = (record: any): EmpresaResponse => {
+function sanitizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+type OptionalString = string | null | undefined;
+
+interface SocioData {
+  nome_socio?: OptionalString;
+  cpf_parcial?: OptionalString;
+  data_nascimento?: OptionalString;
+  cpf_completo?: OptionalString;
+}
+
+interface SocioEntry {
+  socio?: SocioData | SocioData[] | null;
+  socios?: SocioData | SocioData[] | null;
+  qualificacao?: OptionalString;
+  percentual_capital?: number | string | null;
+}
+
+interface EmpresaRecordInput {
+  cnpj: string;
+  razao_social?: OptionalString;
+  nome_fantasia?: OptionalString;
+  situacao_cadastral?: OptionalString;
+  data_abertura?: OptionalString;
+  porte?: OptionalString;
+  logradouro?: OptionalString;
+  numero?: OptionalString;
+  bairro?: OptionalString;
+  cidade?: OptionalString;
+  uf?: OptionalString;
+  cep?: OptionalString;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  cnae_principal_codigo?: OptionalString;
+  cnae_principal_descricao?: OptionalString;
+  telefones?: string[] | string | null;
+  emails?: string[] | string | null;
+  documentos?: unknown[] | null;
+  empresa_socios?: SocioEntry[] | null;
+}
+
+interface DealRecordInput {
+  id: string;
+  company_name?: OptionalString;
+  companyName?: OptionalString;
+  contact_name?: OptionalString;
+  contactName?: OptionalString;
+  contact_email?: OptionalString;
+  contactEmail?: OptionalString;
+  value?: number | string | null;
+  probability?: number | string | null;
+  expected_close_date?: OptionalString;
+  expectedCloseDate?: OptionalString;
+  last_activity?: OptionalString;
+  lastActivity?: OptionalString;
+  stage?: OptionalString;
+  health_score?: number | string | null;
+  healthScore?: number | string | null;
+  health_reasoning?: OptionalString;
+  healthReasoning?: OptionalString;
+  health_suggested_action?: OptionalString;
+  healthSuggestedAction?: OptionalString;
+  empresa_cnpj?: OptionalString;
+  empresaCnpj?: OptionalString;
+  owner_id?: OptionalString;
+  ownerId?: OptionalString;
+  created_at?: OptionalString;
+  createdAt?: OptionalString;
+  [key: string]: unknown;
+}
+
+interface TaskDealRelation {
+  company_name?: OptionalString;
+  name?: OptionalString;
+  title?: OptionalString;
+}
+
+interface TaskRecordInput {
+  id: string;
+  title?: OptionalString;
+  due_date?: OptionalString;
+  priority?: OptionalString;
+  status?: OptionalString;
+  description?: OptionalString;
+  google_calendar_event_id?: OptionalString;
+  deal_id?: OptionalString;
+  related_deal_name?: OptionalString;
+  deals?: TaskDealRelation | null;
+  created_at?: OptionalString;
+}
+
+interface ProfileRecordInput {
+  id: string;
+  name?: OptionalString;
+  email?: OptionalString;
+  role?: OptionalString;
+  status?: OptionalString;
+  last_login?: OptionalString;
+  email_usage_gb?: number | string | null;
+}
+
+const extractSocioData = (value: SocioEntry | null | undefined): SocioData | null => {
+  if (!value) {
+    return null;
+  }
+
+  const candidate = value.socio ?? value.socios ?? null;
+  if (!candidate) {
+    return null;
+  }
+
+  return Array.isArray(candidate) ? candidate[0] ?? null : candidate;
+};
+
+export const mapEmpresaRecordToResponse = (record: EmpresaRecordInput): EmpresaResponse => {
   const endereco: EnderecoResponse = {
     logradouro: record.logradouro ?? '',
     numero: record.numero ?? '',
@@ -155,26 +276,28 @@ export const mapEmpresaRecordToResponse = (record: any): EmpresaResponse => {
     cidade: record.cidade ?? '',
     uf: record.uf ?? '',
     cep: record.cep ?? '',
-    latitude: record.latitude ?? undefined,
-    longitude: record.longitude ?? undefined,
+    latitude: sanitizeNumber(record.latitude) ?? undefined,
+    longitude: sanitizeNumber(record.longitude) ?? undefined,
   };
-
   const socios: SocioResponse[] = Array.isArray(record.empresa_socios)
     ? record.empresa_socios
-        .map((entry: any) => {
-          const socio = entry.socio ?? entry.socios ?? {};
-          const nome = socio.nome_socio ?? '';
+        .map((entry) => {
+          const socio = extractSocioData(entry);
+          const nome = socio?.nome_socio ?? '';
           if (!nome) {
             return null;
           }
+
+          const percentual = Number(entry.percentual_capital ?? 0);
+
           return {
             nome_socio: nome,
-            cpf_parcial: sanitizeCnpj(socio.cpf_parcial ?? ''),
+            cpf_parcial: sanitizeCnpj(socio?.cpf_parcial ?? ''),
             qualificacao: entry.qualificacao ?? 'Sócio',
-            percentual_capital: entry.percentual_capital ? Number(entry.percentual_capital) : 0,
-          } as SocioResponse;
+            percentual_capital: Number.isFinite(percentual) ? percentual : 0,
+          } satisfies SocioResponse;
         })
-        .filter(Boolean) as SocioResponse[]
+        .filter((socio): socio is SocioResponse => socio !== null)
     : [];
 
   return {
@@ -191,12 +314,12 @@ export const mapEmpresaRecordToResponse = (record: any): EmpresaResponse => {
     },
     quadro_socios: socios,
     telefones: ensureArray<string>(record.telefones),
-    emails: ensureArray<string>(record.emails).map((email: string) => email.toLowerCase()),
+    emails: ensureArray<string>(record.emails).map((email) => email.toLowerCase()),
     documentos: [],
   };
 };
 
-export const mapDealRecordToResponse = (deal: any): DealResponse => {
+export const mapDealRecordToResponse = (deal: DealRecordInput): DealResponse => {
   const parsedValue = typeof deal.value === 'number' ? deal.value : Number(deal.value ?? 0);
   const parsedProbability =
     typeof deal.probability === 'number' ? deal.probability : Number(deal.probability ?? 0);
@@ -230,7 +353,7 @@ export const mapDealRecordToResponse = (deal: any): DealResponse => {
   };
 };
 
-export const mapTaskRecordToResponse = (task: any): TaskResponse => {
+export const mapTaskRecordToResponse = (task: TaskRecordInput): TaskResponse => {
   const relatedDealName = task.related_deal_name
     || task.deals?.company_name
     || task.deals?.name
@@ -266,14 +389,20 @@ const formatLastLogin = (value?: string | null): string => {
   }
 };
 
-export const mapProfileToTeamMember = (profile: any): TeamMemberResponse => ({
+const resolveRole = (value: OptionalString): TeamMemberResponse['role'] =>
+  value === 'Admin' ? 'Admin' : 'User';
+
+const resolveStatus = (value: OptionalString): TeamMemberResponse['status'] =>
+  value === 'Inativo' ? 'Inativo' : 'Ativo';
+
+export const mapProfileToTeamMember = (profile: ProfileRecordInput): TeamMemberResponse => ({
   id: profile.id,
   name: profile.name ?? '',
   email: profile.email ?? '',
-  role: profile.role ?? 'User',
-  status: profile.status ?? 'Ativo',
+  role: resolveRole(profile.role),
+  status: resolveStatus(profile.status),
   lastLogin: formatLastLogin(profile.last_login),
-  emailUsageGB: profile.email_usage_gb ? Number(profile.email_usage_gb) : 0,
+  emailUsageGB: sanitizeNumber(profile.email_usage_gb) ?? 0,
 });
 
 export const handleSupabaseError = <T>(result: PostgrestSingleResponse<T>) => {

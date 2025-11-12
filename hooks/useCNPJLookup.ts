@@ -22,7 +22,7 @@ import React, { useState, useCallback, useEffect } from 'react';
  * lookupCNPJ('00000000000191');
  */
 
-interface Socio {
+export interface Socio {
   cpf_cnpj: string;
   nome: string;
   qualificacao: string;
@@ -30,7 +30,7 @@ interface Socio {
   percentual_capital?: number;
 }
 
-interface Endereco {
+export interface Endereco {
   logradouro: string;
   numero: string;
   complemento?: string;
@@ -40,7 +40,7 @@ interface Endereco {
   cep: string;
 }
 
-interface EmpresaData {
+export interface EmpresaData {
   cnpj: string;
   razao_social: string;
   nome_fantasia?: string;

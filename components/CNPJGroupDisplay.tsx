@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { useCNPJGroup, CNPJUtils } from '../hooks/useCNPJGroup';
+import { useCNPJGroup, CNPJUtils, type GrupoEmpresarial } from '../hooks/useCNPJGroup';
+import type { EmpresaData } from '../hooks/useCNPJLookup';
 
 interface CNPJGroupDisplayProps {
   cnpj: string;
-  onMatrizSelected?: (empresa: any) => void;
-  onFilialSelected?: (empresa: any) => void;
+  onMatrizSelected?: (empresa: NonNullable<GrupoEmpresarial['matriz']>) => void;
+  onFilialSelected?: (empresa: Pick<EmpresaData, 'cnpj' | 'razao_social' | 'nome_fantasia' | 'endereco' | 'situacao_cadastral' | 'telefone' | 'email'> & { ordem?: string }) => void;
   autoLoad?: boolean;
   showDetails?: boolean;
 }
@@ -158,7 +159,7 @@ export default function CNPJGroupDisplay({
           className={`border-2 border-green-200 bg-green-50 rounded-lg p-4 ${
             onMatrizSelected ? 'cursor-pointer hover:border-green-400 transition-colors' : ''
           }`}
-          onClick={() => onMatrizSelected && onMatrizSelected(grupo.matriz)}
+          onClick={() => onMatrizSelected?.(grupo.matriz)}
         >
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -239,13 +240,13 @@ export default function CNPJGroupDisplay({
             Filiais ({grupo.totalFiliais})
           </h5>
 
-          {grupo.filiais.map((filial, idx) => (
+          {grupo.filiais.map((filial) => (
             <div
               key={filial.cnpj}
               className={`border border-blue-200 bg-blue-50 rounded-lg p-3 ${
                 onFilialSelected ? 'cursor-pointer hover:border-blue-400 transition-colors' : ''
               }`}
-              onClick={() => onFilialSelected && onFilialSelected(filial)}
+              onClick={() => onFilialSelected?.(filial)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">

@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Empresa, ContratoPublico, SancaoPublica, CompanyActivity, GenealogyNode, Socio } from '../types.ts';
-import { View } from '../App.tsx';
+import { Empresa, ContratoPublico, SancaoPublica, CompanyActivity, GenealogyNode, Socio, NavigateFn } from '../types.ts';
 import { fetchPublicData } from '../services/transparenciaService.ts';
 import { fetchActivitiesForCompany } from '../services/apiService.ts';
 import { fetchBusinessGenealogy } from '../services/businessGenealogyService.ts';
 import { ArrowLeftIcon, BriefcaseIcon, MapPinIcon, UsersIcon, ClockIcon, DollarSignIcon, ShieldIcon, LinkIcon, InboxIcon, TasksIcon, UserIcon } from './icons/Icons.tsx';
+import EditSocioModal from './EditSocioModal.tsx';
 
 interface EmpresaDetalheProps {
     empresa: Empresa;
-    navigate: (view: View, payload?: any) => void;
+    navigate: NavigateFn;
 }
 
 type Tab = 'geral' | 'publico' | 'atividades' | 'genealogia';
@@ -55,7 +55,40 @@ const RenderNode: React.FC<{ node: GenealogyNode }> = ({ node }) => {
 };
 
 
+const formatBirthday = (value?: string | null) => {
+    if (!value) {
+        return null;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+
+    try {
+        return parsed.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: 'long',
+        });
+    } catch (_) {
+        return parsed.toISOString().split('T')[0];
+    }
+};
+
+const formatCpfDisplay = (full?: string | null, fallback?: string) => {
+    if (full) {
+        const digits = full.replace(/[^0-9]/g, '');
+        if (digits.length === 11) {
+            return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+        }
+        return full;
+    }
+
+    return fallback ?? 'Não informado';
+};
+
 const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) => {
+    const [empresaData, setEmpresaData] = useState<Empresa | null>(empresa ?? null);
     const [activeTab, setActiveTab] = useState<Tab>('geral');
 
     const [publicData, setPublicData] = useState<{ contratos: ContratoPublico[], sancoes: SancaoPublica[] }>({ contratos: [], sancoes: [] });
@@ -65,15 +98,41 @@ const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) =>
     const [loadingPublic, setLoadingPublic] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
     const [loadingGenealogy, setLoadingGenealogy] = useState(false);
+    const [editingSocio, setEditingSocio] = useState<Socio | null>(null);
+
+    useEffect(() => {
+        setEmpresaData(empresa ?? null);
+    }, [empresa]);
+
+    const handleSocioUpdated = useCallback((updatedSocio: Socio) => {
+        setEmpresaData((current) => {
+            if (!current) {
+                return current;
+            }
+
+            return {
+                ...current,
+                quadro_socios: current.quadro_socios.map((item) =>
+                    item.cpf_parcial === updatedSocio.cpf_parcial
+                        ? {
+                            ...item,
+                            data_nascimento: updatedSocio.data_nascimento ?? null,
+                            cpf_completo: updatedSocio.cpf_completo ?? null,
+                        }
+                        : item,
+                ),
+            };
+        });
+    }, []);
 
     useEffect(() => {
         const loadData = async () => {
-            if (!empresa) return;
+            if (!empresaData) return;
 
             if (activeTab === 'publico' && publicData.contratos.length === 0 && publicData.sancoes.length === 0) {
                 setLoadingPublic(true);
                 try {
-                    const data = await fetchPublicData(empresa.cnpj);
+                    const data = await fetchPublicData(empresaData.cnpj);
                     setPublicData(data);
                 } catch (error) { console.error(error); }
                 finally { setLoadingPublic(false); }
@@ -81,7 +140,7 @@ const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) =>
             if (activeTab === 'atividades' && activities.length === 0) {
                 setLoadingActivities(true);
                 try {
-                    const data = await fetchActivitiesForCompany(empresa.razao_social);
+                    const data = await fetchActivitiesForCompany(empresaData.razao_social);
                     setActivities(data);
                 } catch (error) { console.error(error); }
                 finally { setLoadingActivities(false); }
@@ -89,17 +148,17 @@ const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) =>
             if (activeTab === 'genealogia' && !genealogy) {
                 setLoadingGenealogy(true);
                 try {
-                    const data = await fetchBusinessGenealogy(empresa.cnpj);
+                    const data = await fetchBusinessGenealogy(empresaData.cnpj);
                     setGenealogy(data);
                 } catch (error) { console.error(error); }
                 finally { setLoadingGenealogy(false); }
             }
         };
         loadData();
-    }, [activeTab, empresa, publicData, activities, genealogy]);
+    }, [activeTab, empresaData, publicData, activities, genealogy]);
 
 
-    if (!empresa) {
+    if (!empresaData) {
         return (
             <div className="space-y-6">
                 <button onClick={() => navigate('Prospecção')} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4">
@@ -176,33 +235,59 @@ const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) =>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-gray-800 p-6 rounded-lg">
                             <h3 className="text-xl font-semibold text-white mb-3 flex items-center gap-2"><BriefcaseIcon className="w-5 h-5 text-indigo-400"/>Informações Gerais</h3>
-                            <p><strong>CNPJ:</strong> {empresa.cnpj}</p>
-                            <p><strong>Razão Social:</strong> {empresa.razao_social}</p>
-                            <p><strong>Nome Fantasia:</strong> {empresa.nome_fantasia}</p>
-                            <p><strong>Data de Abertura:</strong> {new Date(empresa.data_abertura).toLocaleDateString('pt-BR')}</p>
-                            <p><strong>Porte:</strong> {empresa.porte}</p>
-                            <p><strong>CNAE Principal:</strong> {empresa.cnae_principal.descricao}</p>
+                            <p><strong>CNPJ:</strong> {empresaData.cnpj}</p>
+                            <p><strong>Razão Social:</strong> {empresaData.razao_social}</p>
+                            <p><strong>Nome Fantasia:</strong> {empresaData.nome_fantasia}</p>
+                            <p><strong>Data de Abertura:</strong> {new Date(empresaData.data_abertura).toLocaleDateString('pt-BR')}</p>
+                            <p><strong>Porte:</strong> {empresaData.porte}</p>
+                            <p><strong>CNAE Principal:</strong> {empresaData.cnae_principal.descricao}</p>
                         </div>
                         <div className="bg-gray-800 p-6 rounded-lg">
                             <h3 className="text-xl font-semibold text-white mb-3 flex items-center gap-2"><MapPinIcon className="w-5 h-5 text-indigo-400" />Endereço Principal</h3>
-                            <p>{`${empresa.endereco_principal.logradouro}, ${empresa.endereco_principal.numero}`}</p>
-                            <p>{empresa.endereco_principal.bairro}</p>
-                            <p>{`${empresa.endereco_principal.cidade} - ${empresa.endereco_principal.uf}`}</p>
-                            <p><strong>CEP:</strong> {empresa.endereco_principal.cep}</p>
+                            <p>{`${empresaData.endereco_principal.logradouro}, ${empresaData.endereco_principal.numero}`}</p>
+                            <p>{empresaData.endereco_principal.bairro}</p>
+                            <p>{`${empresaData.endereco_principal.cidade} - ${empresaData.endereco_principal.uf}`}</p>
+                            <p><strong>CEP:</strong> {empresaData.endereco_principal.cep}</p>
                         </div>
                         <div className="bg-gray-800 p-6 rounded-lg md:col-span-2">
                             <h3 className="text-xl font-semibold text-white mb-3 flex items-center gap-2"><UsersIcon className="w-5 h-5 text-indigo-400" />Quadro Societário</h3>
-                            {empresa.quadro_socios.length > 0 ? (
-                                <ul className="space-y-2">
-                                    {empresa.quadro_socios.map(socio => (
-                                        <li key={socio.cpf_parcial} className="flex items-center gap-3">
-                                            <UserIcon className="w-4 h-4 text-gray-400" />
-                                            <div>
-                                                <p className="font-medium text-white">{socio.nome_socio}</p>
-                                                <p className="text-sm text-gray-400">{socio.qualificacao}</p>
-                                            </div>
-                                        </li>
-                                    ))}
+                            {empresaData.quadro_socios.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {empresaData.quadro_socios.map((socio) => {
+                                        const birthdayLabel = formatBirthday(socio.data_nascimento);
+                                        const cpfLabel = formatCpfDisplay(socio.cpf_completo, socio.cpf_parcial);
+                                        return (
+                                            <li key={socio.cpf_parcial} className="flex items-start justify-between gap-3 rounded-lg border border-gray-700/60 bg-gray-900/40 p-3">
+                                                <div className="flex items-start gap-3">
+                                                    <UserIcon className="w-5 h-5 text-gray-400" />
+                                                    <div>
+                                                        <p className="font-medium text-white">{socio.nome_socio}</p>
+                                                        <p className="text-sm text-gray-400">{socio.qualificacao}</p>
+                                                        <p className="text-xs text-gray-400">CPF: {cpfLabel}</p>
+                                                        {!socio.cpf_completo && (
+                                                            <p className="text-xs italic text-amber-300/80">Informe o CPF completo para habilitar pesquisas avançadas.</p>
+                                                        )}
+                                                        {birthdayLabel ? (
+                                                            <p className="text-xs text-gray-300">
+                                                                Aniversário: {birthdayLabel}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-xs text-gray-500 italic">
+                                                                Sem data de aniversário cadastrada
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditingSocio(socio)}
+                                                    className="rounded-md border border-indigo-500/50 px-3 py-1 text-xs font-semibold text-indigo-300 transition hover:border-indigo-400 hover:text-indigo-200"
+                                                >
+                                                    Atualizar dados
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             ) : <p className="text-gray-500">Quadro societário não informado.</p>}
                         </div>
@@ -213,51 +298,60 @@ const EmpresaDetalhe: React.FC<EmpresaDetalheProps> = ({ empresa, navigate }) =>
 
 
     return (
-        <div className="space-y-6">
-            <button onClick={() => navigate('Prospecção')} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4">
-                <ArrowLeftIcon className="h-4 w-4" />
-                Voltar para Prospecção
-            </button>
-            
-            {/* Header */}
-            <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white">{empresa.nome_fantasia}</h1>
-                        <p className="text-lg text-gray-400">{empresa.razao_social}</p>
+        <>
+            <div className="space-y-6">
+                <button onClick={() => navigate('Prospecção')} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4">
+                    <ArrowLeftIcon className="h-4 w-4" />
+                    Voltar para Prospecção
+                </button>
+                
+                {/* Header */}
+                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">{empresaData.nome_fantasia}</h1>
+                            <p className="text-lg text-gray-400">{empresaData.razao_social}</p>
+                        </div>
+                        <span className={`text-sm font-semibold px-3 py-1 rounded-full whitespace-nowrap ${getStatusColor(empresaData.situacao_cadastral)}`}>
+                            {empresaData.situacao_cadastral}
+                        </span>
                     </div>
-                    <span className={`text-sm font-semibold px-3 py-1 rounded-full whitespace-nowrap ${getStatusColor(empresa.situacao_cadastral)}`}>
-                        {empresa.situacao_cadastral}
-                    </span>
                 </div>
-            </div>
 
-            {/* Tabs */}
-            <div className="border-b border-gray-700">
-                <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`${
-                                activeTab === tab.id
-                                    ? 'border-indigo-500 text-indigo-400'
-                                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
-                        >
-                            <tab.icon className="w-5 h-5" />
-                            {tab.label}
-                        </button>
-                    ))}
-                </nav>
-            </div>
-            
-            {/* Content */}
-            <div className="mt-6">
-                {renderContent()}
-            </div>
+                {/* Tabs */}
+                <div className="border-b border-gray-700">
+                    <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`${
+                                    activeTab === tab.id
+                                        ? 'border-indigo-500 text-indigo-400'
+                                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                            >
+                                <tab.icon className="w-5 h-5" />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+                
+                {/* Content */}
+                <div className="mt-6">
+                    {renderContent()}
+                </div>
 
-        </div>
+            </div>
+            {editingSocio && (
+                <EditSocioModal
+                    socio={editingSocio}
+                    onClose={() => setEditingSocio(null)}
+                    onUpdated={handleSocioUpdated}
+                />
+            )}
+        </>
     );
 };
 

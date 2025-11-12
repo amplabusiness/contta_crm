@@ -133,11 +133,11 @@ export default async function handler(
     }
 
     response.status(405).json({ message: 'Method not allowed' });
-  } catch (rawError: any) {
-    const error = rawError ?? {};
+  } catch (rawError: unknown) {
+    const error = (rawError ?? {}) as { status?: number; message?: string };
     const status = typeof error.status === 'number' ? error.status : 500;
     const message = error.message || 'Internal server error';
-    console.error('Error in tasks API:', error);
+    console.error('Error in tasks API:', rawError);
     response.status(status).json({ message });
   }
 }

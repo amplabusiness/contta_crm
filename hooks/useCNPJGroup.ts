@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { EmpresaData } from './useCNPJLookup';
 
 /**
  * Utilitários para trabalhar com CNPJ
@@ -74,18 +75,19 @@ export const CNPJUtils = {
 /**
  * Interface para empresa do grupo
  */
-interface EmpresaGrupo {
-  cnpj: string;
-  razao_social: string;
-  nome_fantasia?: string;
+type EmpresaGrupo = Pick<EmpresaData,
+  'cnpj' |
+  'razao_social' |
+  'nome_fantasia' |
+  'situacao_cadastral' |
+  'endereco' |
+  'telefone' |
+  'email'
+> & {
   ordem?: string;
-  situacao_cadastral?: string;
-  endereco?: any;
-  telefone?: string;
-  email?: string;
-}
+};
 
-interface GrupoEmpresarial {
+export interface GrupoEmpresarial {
   cnpjRaiz: string;
   cnpjFornecido: string;
   isMatriz: boolean;

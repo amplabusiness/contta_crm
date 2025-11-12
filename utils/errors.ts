@@ -16,7 +16,7 @@ export class CRMError extends Error {
   public readonly code: string;
   public readonly statusCode: number;
   public readonly isOperational: boolean;
-  public readonly context?: Record<string, any>;
+  public readonly context?: Record<string, unknown>;
   public readonly timestamp: Date;
   public readonly correlationId?: string;
 
@@ -25,7 +25,7 @@ export class CRMError extends Error {
     code: string,
     statusCode = 500,
     isOperational = true,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(message);
@@ -63,7 +63,7 @@ export class CRMError extends Error {
 export class ChurnAnalysisError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -83,7 +83,7 @@ export class ChurnAnalysisError extends CRMError {
 export class UpsellAnalysisError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -103,7 +103,7 @@ export class UpsellAnalysisError extends CRMError {
 export class GeminiAPIError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -123,7 +123,7 @@ export class GeminiAPIError extends CRMError {
 export class OutputValidationError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -147,7 +147,7 @@ export class OutputValidationError extends CRMError {
 export class AuthenticationError extends CRMError {
   constructor(
     message = 'Não autenticado',
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -167,7 +167,7 @@ export class AuthenticationError extends CRMError {
 export class AuthorizationError extends CRMError {
   constructor(
     message = 'Sem permissão',
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -187,7 +187,7 @@ export class AuthorizationError extends CRMError {
 export class ValidationError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -207,7 +207,7 @@ export class ValidationError extends CRMError {
 export class DatabaseError extends CRMError {
   constructor(
     message: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -227,7 +227,7 @@ export class DatabaseError extends CRMError {
 export class NotFoundError extends CRMError {
   constructor(
     resource: string,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -250,7 +250,7 @@ export class RateLimitError extends CRMError {
   constructor(
     message = 'Muitas requisições',
     retryAfter?: number,
-    context?: Record<string, any>,
+  context?: Record<string, unknown>,
     correlationId?: string
   ) {
     super(
@@ -302,13 +302,13 @@ export function generateCorrelationId(): string {
 /**
  * Error boundary para async functions
  */
-export function catchAsync<T extends (...args: any[]) => Promise<any>>(
+export function catchAsync<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   errorClass: typeof CRMError = CRMError
 ): T {
   return (async (...args: Parameters<T>) => {
     try {
-      return await fn(...args);
+  return await fn(...args);
     } catch (error) {
       if (isCRMError(error)) {
         throw error;
@@ -327,7 +327,7 @@ export function catchAsync<T extends (...args: any[]) => Promise<any>>(
 /**
  * Formata erro para logging
  */
-export function formatErrorForLogging(error: unknown): Record<string, any> {
+export function formatErrorForLogging(error: unknown): Record<string, unknown> {
   if (isCRMError(error)) {
     return {
       type: 'CRMError',

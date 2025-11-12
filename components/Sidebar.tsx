@@ -18,16 +18,16 @@ import {
 // FIX: Added file extension to import path
 } from './icons/Icons.tsx';
 // FIX: Added file extension to import path
-import { View } from '../App.tsx';
+import { NavigateFn, View, UserRole } from '../types.ts';
 // FIX: Added file extension to import path
 
 interface SidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   currentView: View;
-  navigate: (view: View) => void;
+  navigate: NavigateFn;
   userName: string;
-  userRole: string;
+  userRole: UserRole;
 }
 
 
@@ -57,7 +57,7 @@ const adminNavItems: { view: View; icon: React.FC<{ className?: string }>; label
 const NavLink: React.FC<{
     item: { view: View; icon: React.FC<{ className?: string }>; label: string };
     currentView: View;
-    navigate: (view: View) => void;
+  navigate: NavigateFn;
 }> = ({ item, currentView, navigate }) => {
     const isActive = item.view === currentView || (item.view === 'Prospecção' && currentView === 'Vínculos');
     const Icon = item.icon;
@@ -118,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, currentV
                 ))}
             </div>
 
-             {userRole?.toLowerCase() === 'admin' && (
+            {userRole.toLowerCase() === 'admin' && (
                 <div className="pt-4 mt-4 space-y-1 border-t border-gray-700/50">
                     <p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase">Admin</p>
                     {adminNavItems.map((item) => (

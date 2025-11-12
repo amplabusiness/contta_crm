@@ -1,17 +1,17 @@
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 // FIX: Added file extensions to import paths.
-import { 
-    Empresa, 
-    Socio, 
-    RedeDeVinculos, 
-    GenealogiaSocio, 
-    Vinculo, 
-    ParentePotencial, 
-    VinculoAnalysis 
+import {
+    Empresa,
+    Socio,
+    RedeDeVinculos,
+    GenealogiaSocio,
+    Vinculo,
+    ParentePotencial,
+    VinculoAnalysis,
+    NavigateFn,
 } from '../types.ts';
-import { View } from '../App.tsx';
 import { fetchVinculos } from '../services/vinculosService.ts';
 import { fetchGenealogia } from '../services/genealogiaService.ts';
 import { generatePitchFromVinculos } from '../services/geminiService.ts';
@@ -20,8 +20,8 @@ import GenealogyNetwork from './GenealogyNetwork.tsx';
 import { ArrowLeftIcon, SparkleIcon, ClipboardIcon, CheckCircleIcon } from './icons/Icons.tsx';
 
 interface VinculosProps {
-  empresa: Empresa;
-  navigate: (view: View, payload?: any) => void;
+    empresa: Empresa;
+    navigate: NavigateFn;
 }
 
 interface PitchState {

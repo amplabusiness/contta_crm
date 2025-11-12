@@ -2,29 +2,37 @@
 -- Execute este script no SQL Editor do Supabase
 
 -- Enum Types para simular os tipos do TypeScript
-DO $$ BEGIN
-    CREATE TYPE public."UserRole" AS ENUM ('Admin', 'User');
+DO $$
+BEGIN
+  CREATE TYPE public."UserRole" AS ENUM ('Admin', 'User');
 EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+  WHEN duplicate_object THEN null;
+END;
+$$;
 
-DO $$ BEGIN
-    CREATE TYPE public."DealStage" AS ENUM ('Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost');
+DO $$
+BEGIN
+  CREATE TYPE public."DealStage" AS ENUM ('Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost');
 EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+  WHEN duplicate_object THEN null;
+END;
+$$;
 
-DO $$ BEGIN
-    CREATE TYPE public."TaskStatus" AS ENUM ('A Fazer', 'Em Andamento', 'Concluída');
+DO $$
+BEGIN
+  CREATE TYPE public."TaskStatus" AS ENUM ('A Fazer', 'Em Andamento', 'Concluída');
 EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+  WHEN duplicate_object THEN null;
+END;
+$$;
 
-DO $$ BEGIN
-    CREATE TYPE public."TaskPriority" AS ENUM ('Alta', 'Média', 'Baixa');
+DO $$
+BEGIN
+  CREATE TYPE public."TaskPriority" AS ENUM ('Alta', 'Média', 'Baixa');
 EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+  WHEN duplicate_object THEN null;
+END;
+$$;
 
 -- Tabela de Perfis, ligada à autenticação do Supabase
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -64,8 +72,16 @@ CREATE TABLE IF NOT EXISTS public.empresas (
 -- Tabela de Sócios (para evitar duplicatas)
 CREATE TABLE IF NOT EXISTS public.socios (
   cpf_parcial TEXT PRIMARY KEY,
-  nome_socio TEXT NOT NULL
+  nome_socio TEXT NOT NULL,
+  data_nascimento DATE,
+  cpf_completo TEXT
 );
+
+ALTER TABLE public.socios
+  ADD COLUMN IF NOT EXISTS data_nascimento DATE;
+
+ALTER TABLE public.socios
+  ADD COLUMN IF NOT EXISTS cpf_completo TEXT;
 
 -- Tabela de Junção para relação Empresa <-> Sócio (Muitos para Muitos)
 CREATE TABLE IF NOT EXISTS public.empresa_socios (
@@ -75,6 +91,105 @@ CREATE TABLE IF NOT EXISTS public.empresa_socios (
   qualificacao TEXT,
   percentual_capital NUMERIC,
   UNIQUE(empresa_cnpj, socio_cpf_parcial)
+);
+
+-- Tabela de Vínculos Societários (graus além da relação direta)
+CREATE TABLE IF NOT EXISTS public.vinculos_societarios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  socio_cpf_parcial TEXT REFERENCES public.socios(cpf_parcial) ON DELETE CASCADE,
+  empresa_vinculada_cnpj TEXT REFERENCES public.empresas(cnpj) ON DELETE CASCADE,
+  empresa_vinculada_nome TEXT,
+  grau_vinculo INTEGER,
+  tipo_vinculo TEXT,
+  data_descoberta TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela Genealógica de Sócios (parentesco sugerido)
+CREATE TABLE IF NOT EXISTS public.genealogia_socios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  socio_principal_cpf_parcial TEXT REFERENCES public.socios(cpf_parcial) ON DELETE CASCADE,
+  cpf_parcial_relacionado TEXT,
+  nome_relacionado TEXT,
+  grau_parentesco TEXT,
+  tipo_descoberta TEXT,
+  confiabilidade INTEGER,
+  notas TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela de Empresas Próximas (prospecção geolocalizada)
+CREATE TABLE IF NOT EXISTS public.empresas_proximas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_referencia_cnpj TEXT REFERENCES public.empresas(cnpj) ON DELETE CASCADE,
+  empresa_proxima_cnpj TEXT,
+  razao_social_proxima TEXT,
+  distancia_metros INTEGER,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  cnae_principal_codigo TEXT,
+  porte TEXT,
+  status_prospeccao TEXT DEFAULT 'nao_contatado',
+  indicado_por_profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela do Programa de Indicações (gamificação)
+CREATE TABLE IF NOT EXISTS public.programa_indicacoes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  perfil_indicador_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  indicacao_id UUID REFERENCES public.indicacoes(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pendente',
+  data_indicacao TIMESTAMPTZ DEFAULT NOW(),
+  data_conversao TIMESTAMPTZ,
+  tipo_remuneracao TEXT,
+  valor_remuneracao NUMERIC,
+  pago BOOLEAN DEFAULT FALSE,
+  nivel_programa TEXT,
+  notas TEXT
+);
+
+-- Tabela de Documentos CNPJá armazenados no Storage
+CREATE TABLE IF NOT EXISTS public.documentos_cnpja (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_cnpj TEXT REFERENCES public.empresas(cnpj) ON DELETE CASCADE,
+  tipo_documento TEXT,
+  storage_path TEXT,
+  tamanho_bytes BIGINT,
+  versao INTEGER DEFAULT 1,
+  baixado_em TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela de Processos Judiciais (rastreio DataJud / tribunais)
+CREATE TABLE IF NOT EXISTS public.processos_judiciais (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entidade_tipo TEXT CHECK (entidade_tipo IN ('empresa', 'socio', 'parente')),
+  entidade_documento TEXT NOT NULL,
+  entidade_nome TEXT,
+  numero_processo TEXT NOT NULL,
+  tribunal TEXT,
+  orgao_julgador TEXT,
+  classe TEXT,
+  assunto TEXT,
+  situacao TEXT,
+  risco_score NUMERIC,
+  ultimo_evento_data TIMESTAMPTZ,
+  ultimo_evento_descricao TEXT,
+  origem TEXT DEFAULT 'datajud',
+  criado_por UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela de Movimentações de Processos
+CREATE TABLE IF NOT EXISTS public.processo_movimentacoes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  processo_id UUID REFERENCES public.processos_judiciais(id) ON DELETE CASCADE,
+  data_movimentacao TIMESTAMPTZ NOT NULL,
+  descricao TEXT,
+  tipo TEXT,
+  fonte TEXT,
+  payload JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Tabela de Negócios (Deals)
@@ -130,34 +245,48 @@ ALTER TABLE public.empresa_socios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.indicacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vinculos_societarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.genealogia_socios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.empresas_proximas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.programa_indicacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.documentos_cnpja ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.processos_judiciais ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.processo_movimentacoes ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para profiles
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.profiles FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow individual update access"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Políticas RLS para empresas (todos podem ler, apenas admins podem modificar)
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.empresas FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow admin write access"
   ON public.empresas FOR ALL
   USING (
@@ -168,18 +297,22 @@ DO $$ BEGIN
   );
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Políticas RLS para deals
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.deals FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow owner write access"
   ON public.deals FOR ALL
   USING (auth.uid() = owner_id OR EXISTS (
@@ -192,18 +325,22 @@ DO $$ BEGIN
   ));
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Políticas RLS para tasks
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.tasks FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow owner write access"
   ON public.tasks FOR ALL
   USING (auth.uid() = assignee_id OR EXISTS (
@@ -216,35 +353,43 @@ DO $$ BEGIN
   ));
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Políticas RLS para socios e empresa_socios (leitura para autenticados)
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.socios FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.empresa_socios FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Políticas RLS para indicacoes
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow authenticated read access"
   ON public.indicacoes FOR SELECT
   USING (auth.role() = 'authenticated');
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
+DO $$
+BEGIN
   CREATE POLICY "Allow owner write access"
   ON public.indicacoes FOR ALL
   USING (auth.uid() = indicador_id OR EXISTS (
@@ -257,7 +402,226 @@ DO $$ BEGIN
   ));
 EXCEPTION
   WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
+
+-- Políticas RLS para tabelas auxiliares
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.vinculos_societarios FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.genealogia_socios FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.empresas_proximas FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.programa_indicacoes FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.documentos_cnpja FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.processos_judiciais FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow authenticated read access"
+  ON public.processo_movimentacoes FOR SELECT
+  USING (auth.role() = 'authenticated');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.vinculos_societarios FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.genealogia_socios FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.empresas_proximas FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.programa_indicacoes FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.documentos_cnpja FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.processos_judiciais FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Allow admin write access"
+  ON public.processo_movimentacoes FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'Admin'
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END;
+$$;
 
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_deals_owner_id ON public.deals(owner_id);
@@ -266,4 +630,14 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON public.tasks(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_deal_id ON public.tasks(deal_id);
 CREATE INDEX IF NOT EXISTS idx_empresa_socios_empresa_cnpj ON public.empresa_socios(empresa_cnpj);
 CREATE INDEX IF NOT EXISTS idx_empresa_socios_socio_cpf ON public.empresa_socios(socio_cpf_parcial);
+CREATE INDEX IF NOT EXISTS idx_vinculos_societarios_socio ON public.vinculos_societarios(socio_cpf_parcial);
+CREATE INDEX IF NOT EXISTS idx_vinculos_societarios_empresa ON public.vinculos_societarios(empresa_vinculada_cnpj);
+CREATE INDEX IF NOT EXISTS idx_genealogia_socios_principal ON public.genealogia_socios(socio_principal_cpf_parcial);
+CREATE INDEX IF NOT EXISTS idx_empresas_proximas_referencia ON public.empresas_proximas(empresa_referencia_cnpj);
+CREATE INDEX IF NOT EXISTS idx_programa_indicacoes_indicador ON public.programa_indicacoes(perfil_indicador_id);
+CREATE INDEX IF NOT EXISTS idx_documentos_cnpja_empresa ON public.documentos_cnpja(empresa_cnpj);
+CREATE INDEX IF NOT EXISTS idx_processos_judiciais_entidade ON public.processos_judiciais(entidade_documento);
+CREATE INDEX IF NOT EXISTS idx_processos_judiciais_numero ON public.processos_judiciais(numero_processo);
+CREATE INDEX IF NOT EXISTS idx_processo_movimentacoes_processo ON public.processo_movimentacoes(processo_id);
+CREATE INDEX IF NOT EXISTS idx_processo_movimentacoes_data ON public.processo_movimentacoes(data_movimentacao);
 

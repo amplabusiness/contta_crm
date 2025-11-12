@@ -3,7 +3,7 @@ import {
     StatCardData, SalesData, DealStageData, RecentActivity, Empresa,
     ChurnPrediction, UpsellOpportunity, AutomatedReport, ConsentStatus, DataAccessLog,
     ProgramaIndicacoesStatus, Indicacao, EmpresaParaIndicar, Deal, DealStage, Task, TaskStatus, TeamMember, UserRole, CompanyActivity,
-    GlobalSearchResults
+    GlobalSearchResults, EmpresaDashboardRequestOptions, EmpresaDashboardResponse, RedeDeVinculos, ReportType, ReportIndicacao
 } from '../types.ts';
 import { supabase } from './supabaseClient.ts';
 import {
@@ -157,6 +157,55 @@ export const fetchEmpresaByCnpj = async (cnpj: string): Promise<Empresa | null> 
     }
 
     return payload ?? null;
+};
+
+export const fetchEmpresaDashboard = async (
+    cnpj: string,
+    options: EmpresaDashboardRequestOptions = {},
+): Promise<EmpresaDashboardResponse> => {
+    const sanitizedCnpj = cnpj.replace(/[^\d]/g, '');
+
+    if (sanitizedCnpj.length !== 14) {
+        throw new Error('CNPJ inválido para dashboard.');
+    }
+
+    const params = new URLSearchParams();
+    const modules = options.include?.filter(Boolean);
+
+    if (modules && modules.length > 0) {
+        params.set('include', modules.join(','));
+    }
+
+    if (options.refresh) {
+        params.set('refresh', 'true');
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/api/empresas/${sanitizedCnpj}/dashboard${queryString ? `?${queryString}` : ''}`;
+
+    const response = await authorizedFetch(endpoint, {
+        method: 'GET',
+        signal: options.signal,
+    });
+
+    if (response.status === 404) {
+        throw new Error('Empresa não encontrada.');
+    }
+
+    if (!response.ok) {
+        let message = 'Falha ao carregar dashboard da empresa.';
+        try {
+            const payload = await response.json();
+            if (payload?.message && typeof payload.message === 'string') {
+                message = payload.message;
+            }
+        } catch (_) {
+            /* Ignored */
+        }
+        throw new Error(message);
+    }
+
+    return await response.json();
 };
 
 
@@ -334,6 +383,81 @@ export const deleteTask = async (taskId: string): Promise<void> => {
     }
 };
 
+// Sócios
+export interface UpdateSocioDataParams {
+    cpfParcial: string;
+    dataNascimento: string | null;
+    nomeSocio?: string;
+    cpfCompleto?: string | null;
+}
+
+export interface UpdateSocioDataResponse {
+    cpf_parcial: string;
+    nome_socio: string | null;
+    data_nascimento: string | null;
+    cpf_completo: string | null;
+}
+
+const isUpdateSocioDataResponse = (value: unknown): value is UpdateSocioDataResponse => {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const candidate = value as Partial<UpdateSocioDataResponse>;
+
+    return (
+        typeof candidate.cpf_parcial === 'string'
+        && ('nome_socio' in candidate ? candidate.nome_socio === null || typeof candidate.nome_socio === 'string' : true)
+        && ('data_nascimento' in candidate ? candidate.data_nascimento === null || typeof candidate.data_nascimento === 'string' : true)
+        && ('cpf_completo' in candidate ? candidate.cpf_completo === null || typeof candidate.cpf_completo === 'string' : true)
+    );
+};
+
+const extractMessageFromPayload = (value: unknown): string | null => {
+    if (!value || typeof value !== 'object') {
+        return null;
+    }
+
+    if ('message' in value) {
+        const { message } = value as { message?: unknown };
+        if (typeof message === 'string') {
+            return message;
+        }
+    }
+
+    return null;
+};
+
+export const updateSocioData = async (
+    params: UpdateSocioDataParams,
+): Promise<UpdateSocioDataResponse> => {
+    const response = await authorizedFetch('/api/socios', {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+    });
+
+    let payload: unknown = null;
+    try {
+        payload = await response.json();
+    } catch (_) {
+        /* Ignore JSON parse errors here */
+    }
+
+    if (!response.ok) {
+        const message = extractMessageFromPayload(payload) ?? 'Falha ao atualizar dados do sócio.';
+        throw new Error(message);
+    }
+
+    if (!isUpdateSocioDataResponse(payload)) {
+        throw new Error('Resposta inválida ao atualizar dados do sócio.');
+    }
+
+    return payload;
+};
+
 // Equipe & Admin
 export const fetchTeamMembers = async (): Promise<TeamMember[]> => {
     const response = await authorizedFetch('/api/team');
@@ -369,13 +493,265 @@ export const updateTeamMemberStatus = async (memberId: string, status: 'Ativo' |
 }
 
 // Report Generation
-export const fetchReportData = async (reportType: 'network' | 'territorial' | 'performance') => {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+export interface NetworkReportData {
+    networkData: RedeDeVinculos[];
+}
+
+export interface TerritorialReportEmpresa {
+    cnpj: string;
+    razao_social: string;
+    nome_fantasia: string | null;
+    situacao_cadastral: Empresa['situacao_cadastral'];
+    data_abertura: string;
+    porte: Empresa['porte'];
+    endereco_principal: Empresa['endereco_principal'];
+    cnae_principal: Empresa['cnae_principal'];
+}
+
+export interface TerritorialReportData {
+    territorialData: TerritorialReportEmpresa[];
+}
+
+export interface PerformanceReportData {
+    performanceData: {
+        status: ProgramaIndicacoesStatus;
+        indicacoes: ReportIndicacao[];
+    };
+}
+
+const mapNetworkData = (value: unknown): RedeDeVinculos[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((bucket) => {
+            if (!isRecord(bucket) || typeof bucket.socio_nome !== 'string' || !Array.isArray(bucket.vinculos)) {
+                return null;
+            }
+
+            const vinculos = bucket.vinculos
+                .map((link) => {
+                    if (!isRecord(link)) {
+                        return null;
+                    }
+
+                    const empresaCnpj = typeof link.empresa_vinculada_cnpj === 'string' ? link.empresa_vinculada_cnpj : null;
+                    const empresaNome = typeof link.empresa_vinculada_nome === 'string' ? link.empresa_vinculada_nome : null;
+                    const grau = typeof link.grau_vinculo === 'number' && (link.grau_vinculo === 1 || link.grau_vinculo === 2 || link.grau_vinculo === 3)
+                        ? link.grau_vinculo
+                        : null;
+                    const tipo = link.tipo_vinculo === 'direto' ? link.tipo_vinculo : 'direto';
+
+                    if (!empresaCnpj || !empresaNome || grau === null) {
+                        return null;
+                    }
+
+                    return {
+                        empresa_vinculada_cnpj: empresaCnpj,
+                        empresa_vinculada_nome: empresaNome,
+                        grau_vinculo: grau,
+                        tipo_vinculo: tipo,
+                    };
+                })
+                .filter((link): link is RedeDeVinculos['vinculos'][number] => link !== null);
+
+            if (vinculos.length === 0) {
+                return null;
+            }
+
+            return {
+                socio_nome: bucket.socio_nome,
+                vinculos,
+            } satisfies RedeDeVinculos;
+        })
+        .filter((entry): entry is RedeDeVinculos => entry !== null);
+};
+
+const isEnderecoRecord = (value: unknown): value is Empresa['endereco_principal'] => {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    return (
+        typeof value.logradouro === 'string' &&
+        typeof value.numero === 'string' &&
+        typeof value.bairro === 'string' &&
+        typeof value.cidade === 'string' &&
+        typeof value.uf === 'string' &&
+        typeof value.cep === 'string'
+    );
+};
+
+const isCnaeRecord = (value: unknown): value is Empresa['cnae_principal'] => {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    return typeof value.codigo === 'string' && typeof value.descricao === 'string';
+};
+
+const mapTerritorialData = (value: unknown): TerritorialReportEmpresa[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((empresa) => {
+            if (!isRecord(empresa)) {
+                return null;
+            }
+
+            const cnpj = typeof empresa.cnpj === 'string' ? empresa.cnpj : null;
+            const razao = typeof empresa.razao_social === 'string' ? empresa.razao_social : null;
+            const situacao = typeof empresa.situacao_cadastral === 'string' ? empresa.situacao_cadastral : null;
+            const dataAbertura = typeof empresa.data_abertura === 'string' ? empresa.data_abertura : null;
+            const porte = typeof empresa.porte === 'string' ? empresa.porte : null;
+
+            if (!cnpj || !razao || !situacao || !dataAbertura || !porte) {
+                return null;
+            }
+
+            const nomeFantasia = typeof empresa.nome_fantasia === 'string' ? empresa.nome_fantasia : null;
+            const endereco = isEnderecoRecord(empresa.endereco_principal) ? empresa.endereco_principal : null;
+            const cnaePrincipal = isCnaeRecord(empresa.cnae_principal) ? empresa.cnae_principal : null;
+
+            if (!endereco || !cnaePrincipal) {
+                return null;
+            }
+
+            return {
+                cnpj,
+                razao_social: razao,
+                nome_fantasia: nomeFantasia,
+                situacao_cadastral: situacao as Empresa['situacao_cadastral'],
+                data_abertura: dataAbertura,
+                porte: porte as Empresa['porte'],
+                endereco_principal: endereco,
+                cnae_principal: cnaePrincipal,
+            };
+        })
+        .filter((empresa): empresa is TerritorialReportEmpresa => empresa !== null);
+};
+
+const mapPerformanceData = (value: unknown): PerformanceReportData['performanceData'] | null => {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    const statusRaw = value.status;
+    const indicacoesRaw = value.indicacoes;
+
+    if (!isRecord(statusRaw) || !Array.isArray(indicacoesRaw)) {
+        return null;
+    }
+
+    const normalizedIndicacoes: ReportIndicacao[] = indicacoesRaw
+        .map((entry) => {
+            if (!isRecord(entry)) {
+                return null;
+            }
+
+            const idValue = entry.id;
+            if (idValue === undefined || idValue === null) {
+                return null;
+            }
+
+            const id = typeof idValue === 'string' ? idValue : String(idValue);
+            const empresaNome = typeof entry.empresa_nome === 'string' ? entry.empresa_nome : null;
+            const status = typeof entry.status === 'string' ? entry.status : null;
+            const dataIndicacao = typeof entry.data_indicacao === 'string' ? entry.data_indicacao : null;
+            const recompensa = typeof entry.recompensa_ganha === 'number' ? entry.recompensa_ganha : Number(entry.recompensa_ganha ?? 0);
+
+            return {
+                id,
+                empresa_nome: empresaNome,
+                status,
+                data_indicacao: dataIndicacao,
+                recompensa_ganha: Number.isFinite(recompensa) ? recompensa : 0,
+            } satisfies ReportIndicacao;
+        })
+        .filter((indicacao): indicacao is ReportIndicacao => indicacao !== null);
+
+    const status: ProgramaIndicacoesStatus | null = (() => {
+        const nivel = statusRaw.nivel;
+        const totalGanho = statusRaw.total_ganho;
+        const indicacoesConvertidas = statusRaw.indicacoes_convertidas;
+        const metaProximoNivel = statusRaw.meta_proximo_nivel;
+        const beneficioAtual = statusRaw.beneficio_atual;
+
+        if (
+            typeof nivel === 'string' &&
+            typeof totalGanho === 'number' &&
+            typeof indicacoesConvertidas === 'number' &&
+            typeof metaProximoNivel === 'number' &&
+            typeof beneficioAtual === 'string'
+        ) {
+            return {
+                nivel: nivel as ProgramaIndicacoesStatus['nivel'],
+                total_ganho: totalGanho,
+                indicacoes_convertidas: indicacoesConvertidas,
+                meta_proximo_nivel: metaProximoNivel,
+                beneficio_atual: beneficioAtual,
+            };
+        }
+
+        return null;
+    })();
+
+    if (!status) {
+        return null;
+    }
+
+    return { status, indicacoes: normalizedIndicacoes };
+};
+
+type ReportResponseMap = {
+    network: NetworkReportData;
+    territorial: TerritorialReportData;
+    performance: PerformanceReportData;
+};
+
+export const fetchReportData = async <T extends ReportType>(reportType: T): Promise<ReportResponseMap[T]> => {
     const params = new URLSearchParams({ type: reportType });
     const response = await authorizedFetch(`/api/reports?${params.toString()}`);
     if (!response.ok) {
         throw new Error('Falha ao buscar dados para geração de relatórios.');
     }
-    return await response.json();
+
+    const payload: unknown = await response.json();
+
+    if (reportType === 'network') {
+        if (!isRecord(payload)) {
+            throw new Error('Resposta inválida para relatório de rede.');
+        }
+
+        const networkData = mapNetworkData(payload.networkData);
+        return { networkData } as ReportResponseMap[T];
+    }
+
+    if (reportType === 'territorial') {
+        if (!isRecord(payload)) {
+            throw new Error('Resposta inválida para relatório territorial.');
+        }
+
+        const territorialData = mapTerritorialData(payload.territorialData);
+        return { territorialData } as ReportResponseMap[T];
+    }
+
+    if (!isRecord(payload)) {
+        throw new Error('Resposta inválida para relatório de performance.');
+    }
+
+    const performanceData = mapPerformanceData(payload.performanceData);
+    if (!performanceData) {
+        throw new Error('Estrutura inválida dos dados de performance.');
+    }
+
+    return { performanceData } as ReportResponseMap[T];
 };
 
 // Empresa Detalhe
@@ -435,8 +811,32 @@ export const fetchActivitiesForCompany = async (companyName: string): Promise<Co
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
+export interface GlobalSearchClientFilters {
+    name?: string;
+    cnae?: string;
+}
+
+export interface GlobalSearchDealFilters {
+    companyName?: string;
+    minValue?: number;
+    stage?: DealStage;
+}
+
+export interface GlobalSearchTaskFilters {
+    title?: string;
+    companyName?: string;
+    priority?: Task['priority'];
+    status?: TaskStatus;
+}
+
+export interface GlobalSearchParams {
+    clients?: GlobalSearchClientFilters;
+    deals?: GlobalSearchDealFilters;
+    tasks?: GlobalSearchTaskFilters;
+}
+
 // Global Search
-export const executeGlobalSearch = async (params: any): Promise<GlobalSearchResults> => {
+export const executeGlobalSearch = async (params: GlobalSearchParams): Promise<GlobalSearchResults> => {
     const results: GlobalSearchResults = { clients: [], deals: [], tasks: [] };
     const loaders: Array<Promise<void>> = [];
 

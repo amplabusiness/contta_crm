@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 // FIX: Added file extensions to import paths.
-import { Empresa, ProspectAnalysis, MarketInsightResult } from '../types.ts';
+import { Empresa, ProspectAnalysis, MarketInsightResult, NavigateFn } from '../types.ts';
 import { generateProspectAnalysis, getLocalAnalysisWithMaps } from '../services/geminiService.ts';
 import { 
     MapPinIcon, 
@@ -13,8 +13,8 @@ import {
 } from './icons/Icons.tsx';
 
 interface EmpresaCardProps {
-  empresa: Empresa;
-  navigate: (view: string, payload: any) => void;
+    empresa: Empresa;
+    navigate: NavigateFn;
 }
 
 const EmpresaCard: React.FC<EmpresaCardProps> = ({ empresa, navigate }) => {

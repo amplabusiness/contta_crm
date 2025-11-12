@@ -9,11 +9,47 @@ import {
   generateTerritorialReport,
   generatePerformanceReport,
 } from '../services/geminiService.ts';
-import { NetworkIcon, MapIcon, GiftIcon, SparkleIcon, DownloadIcon } from './icons/Icons.tsx';
+import { NetworkIcon, MapIcon, GiftIcon, SparkleIcon } from './icons/Icons.tsx';
 
 // This is needed because jspdf and html2canvas are loaded from a CDN
-declare var jspdf: any;
-declare var html2canvas: any;
+interface JsPdfPageSize {
+  getWidth(): number;
+  getHeight(): number;
+}
+
+interface JsPdfInternal {
+  pageSize: JsPdfPageSize;
+}
+
+interface JsPdfInstance {
+  addImage(dataUrl: string, format: string, x: number, y: number, width: number, height: number): void;
+  addPage(): void;
+  save(filename: string): void;
+  internal: JsPdfInternal;
+}
+
+type JsPdfConstructor = new (options?: {
+  orientation?: 'p' | 'l';
+  unit?: string;
+  format?: string | number[];
+}) => JsPdfInstance;
+
+declare const jspdf: { jsPDF: JsPdfConstructor };
+
+interface Html2CanvasElement {
+  innerHTML: string;
+}
+
+interface Html2CanvasResult {
+  toDataURL(type: string): string;
+  width: number;
+  height: number;
+}
+
+declare function html2canvas(
+  element: Html2CanvasElement,
+  options?: { scale?: number; useCORS?: boolean; backgroundColor?: string },
+): Promise<Html2CanvasResult>;
 
 interface ReportGenerationModalProps {
   onClose: () => void;
@@ -41,7 +77,6 @@ const reportOptions = [
 ];
 
 const ReportGenerationModal: React.FC<ReportGenerationModalProps> = ({ onClose }) => {
-  const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
@@ -105,48 +140,50 @@ const ReportGenerationModal: React.FC<ReportGenerationModalProps> = ({ onClose }
   };
 
   const handleGenerateReport = useCallback(async (reportType: ReportType) => {
-    setSelectedReport(reportType);
     setLoading(true);
     setError('');
     
     try {
       setStatusMessage('Buscando dados relevantes...');
-      const data = await fetchReportData(reportType);
-
-      setStatusMessage('IA está gerando a análise...');
       let reportHtml = '';
-      const reportTitle = reportOptions.find(r => r.type === reportType)?.title || 'Relatório';
+      let reportTitle = reportOptions.find(r => r.type === reportType)?.title || 'Relatório';
 
-      switch (reportType) {
-        case 'network':
-          if (!data.networkData || data.networkData.length === 0) {
-            throw new Error('Nenhum vínculo societário encontrado para gerar o relatório.');
-          }
-          reportHtml = await generateNetworkReport(data.networkData);
-          break;
-        case 'territorial':
-          if (!data.territorialData || data.territorialData.length === 0) {
-            throw new Error('Nenhuma empresa ativa encontrada para análise territorial.');
-          }
-          reportHtml = await generateTerritorialReport(data.territorialData);
-          break;
-        case 'performance':
-          if (!data.performanceData) {
-            throw new Error('Dados de performance indisponíveis no momento.');
-          }
-          reportHtml = await generatePerformanceReport(data.performanceData.status, data.performanceData.indicacoes);
-          break;
+      if (reportType === 'network') {
+        const { networkData } = await fetchReportData('network');
+        if (networkData.length === 0) {
+          throw new Error('Nenhum vínculo societário encontrado para gerar o relatório.');
+        }
+        reportTitle = reportOptions.find(r => r.type === 'network')?.title ?? reportTitle;
+        setStatusMessage('IA está gerando a análise...');
+        reportHtml = await generateNetworkReport(networkData);
+      } else if (reportType === 'territorial') {
+        const { territorialData } = await fetchReportData('territorial');
+        if (territorialData.length === 0) {
+          throw new Error('Nenhuma empresa ativa encontrada para análise territorial.');
+        }
+        reportTitle = reportOptions.find(r => r.type === 'territorial')?.title ?? reportTitle;
+        setStatusMessage('IA está gerando a análise...');
+        reportHtml = await generateTerritorialReport(territorialData);
+      } else {
+        const { performanceData } = await fetchReportData('performance');
+        const { status, indicacoes } = performanceData;
+        if (indicacoes.length === 0) {
+          throw new Error('Dados de performance indisponíveis no momento.');
+        }
+        reportTitle = reportOptions.find(r => r.type === 'performance')?.title ?? reportTitle;
+        setStatusMessage('IA está gerando a análise...');
+        reportHtml = await generatePerformanceReport(status, indicacoes);
       }
       
       await generatePdf(reportHtml, reportTitle);
       
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro desconhecido.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
+      setError(message);
       console.error(err);
     } finally {
       setLoading(false);
       setStatusMessage('');
-      setSelectedReport(null);
     }
   }, []);
 
@@ -178,6 +215,7 @@ const ReportGenerationModal: React.FC<ReportGenerationModalProps> = ({ onClose }
                   key={opt.type}
                   onClick={() => handleGenerateReport(opt.type)}
                   className="flex flex-col items-center p-6 text-center bg-gray-900/50 border border-gray-700 rounded-lg hover:bg-indigo-600/20 hover:border-indigo-500 transition-all duration-200"
+                  disabled={loading}
                 >
                   <opt.icon className="w-10 h-10 mb-3 text-indigo-400" />
                   <h3 className="font-semibold text-white">{opt.title}</h3>

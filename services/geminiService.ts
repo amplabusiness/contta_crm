@@ -1,9 +1,9 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { 
-    SalesData, DealStageData, ChurnPrediction, UpsellOpportunity, 
-    MarketInsightResult, Empresa, ProspectAnalysis, Vinculo, 
-    ParentePotencial, VinculoAnalysis, Deal, DealHealth, DataAccessLog, 
-    RedeDeVinculos, ProgramaIndicacoesStatus, Indicacao, Socio
+  SalesData, DealStageData, ChurnPrediction, UpsellOpportunity, 
+  MarketInsightResult, Empresa, ProspectAnalysis, Vinculo, 
+  ParentePotencial, VinculoAnalysis, Deal, DealHealth, DataAccessLog, 
+  RedeDeVinculos, ProgramaIndicacoesStatus, Indicacao, Socio, ReportIndicacao
 // FIX: Added Socio to the import list.
 } from '../types.ts';
 
@@ -175,7 +175,10 @@ export const generateTerritorialReport = async (data: Partial<Empresa>[]): Promi
     return response.text;
 };
 
-export const generatePerformanceReport = async (status: ProgramaIndicacoesStatus, indicacoes: Indicacao[]): Promise<string> => {
+export const generatePerformanceReport = async (
+  status: ProgramaIndicacoesStatus,
+  indicacoes: ReadonlyArray<Indicacao | ReportIndicacao>,
+): Promise<string> => {
     const prompt = `Gere um relatório em HTML sobre a performance do programa de indicações. Dados de status: ${JSON.stringify(status)}. Dados de indicações: ${JSON.stringify(indicacoes)}. Analise o ROI e engajamento.`;
     const response = await ai.models.generateContent({ model, contents: prompt });
     return response.text;

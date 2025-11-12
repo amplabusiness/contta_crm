@@ -1,9 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateAutomatedReport } from '../services/geminiService.ts';
 
-const toHttpError = (status: number, message: string) =>
-  Object.assign(new Error(message), { status });
+type DealStage =
+  | 'Prospecting'
+  | 'Qualification'
+  | 'Proposal'
+  | 'Negotiation'
+  | 'Closed Won'
+  | 'Closed Lost'
+  | string;
+
+interface DealRecord {
+  id: string | number;
+  company_name: string | null;
+  value: number | string | null;
+  stage: DealStage | null;
+  probability?: number | string | null;
+  last_activity?: string | null;
+  expected_close_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+interface TaskRecord {
+  id: string | number;
+  status: string | null;
+  priority: string | null;
+  due_date?: string | null;
+  created_at?: string | null;
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -36,7 +61,7 @@ const formatCurrencyBRL = (value: number) =>
     minimumFractionDigits: 2,
   });
 
-const buildSalesTimeline = (deals: any[]) => {
+const buildSalesTimeline = (deals: DealRecord[]) => {
   const timeline: Record<string, { revenue: number; count: number }> = {};
 
   deals.forEach((deal) => {
@@ -69,7 +94,7 @@ const buildSalesTimeline = (deals: any[]) => {
     }));
 };
 
-const buildDealStageData = (deals: any[]) => {
+const buildDealStageData = (deals: DealRecord[]) => {
   const stages: { name: string; color: string }[] = [
     { name: 'Prospecting', color: '#3b82f6' },
     { name: 'Qualification', color: '#8b5cf6' },
@@ -98,7 +123,7 @@ const daysBetween = (from?: string | null) => {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 };
 
-const buildChurnPredictions = (deals: any[]) => {
+const buildChurnPredictions = (deals: DealRecord[]) => {
   return deals
     .filter((deal) => deal.stage === 'Closed Won')
     .map((deal) => {
@@ -125,7 +150,12 @@ const buildChurnPredictions = (deals: any[]) => {
         'Apresentar roadmap de novas funcionalidades',
       ];
 
-      const reasonIndex = Math.abs(deal.id?.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) ?? 0) % reasons.length;
+      const reasonIndex = Math.abs(
+        deal.id
+          ?.toString()
+          .split('')
+          .reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) ?? 0,
+      ) % reasons.length;
 
       return {
         id: `churn-${deal.id}`,
@@ -139,7 +169,7 @@ const buildChurnPredictions = (deals: any[]) => {
     .slice(0, 5);
 };
 
-const buildUpsellOpportunities = (deals: any[]) => {
+const buildUpsellOpportunities = (deals: DealRecord[]) => {
   return deals
     .filter((deal) => deal.stage === 'Closed Won')
     .map((deal) => {
@@ -157,8 +187,10 @@ const buildUpsellOpportunities = (deals: any[]) => {
       const types: Array<'Upsell' | 'Cross-sell'> = ['Upsell', 'Cross-sell'];
 
       const indexSeed = Math.abs(
-        deal.id?.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) ??
-          0,
+        deal.id
+          ?.toString()
+          .split('')
+          .reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) ?? 0,
       );
 
       return {
@@ -215,8 +247,8 @@ export default async function handler(
       throw tasksResult.error;
     }
 
-    const deals = dealsResult.data ?? [];
-    const tasks = tasksResult.data ?? [];
+  const deals = (dealsResult.data ?? []) as DealRecord[];
+  const tasks = (tasksResult.data ?? []) as TaskRecord[];
 
     const salesData = buildSalesTimeline(deals);
     const dealData = buildDealStageData(deals);
@@ -247,7 +279,7 @@ export default async function handler(
       generatedAt: new Date().toISOString(),
     };
 
-    let insightsHtml: string | null = null;
+  let insightsHtml: string | null = null;
     // DEPRECATED: Use novos endpoints /api/analytics-churn, /api/analytics-upsell, /api/analytics-report
     // const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
     // if (geminiKey) {
@@ -269,11 +301,11 @@ export default async function handler(
       dealData,
       insightsHtml,
     });
-  } catch (rawError: any) {
-    const error = rawError ?? {};
-    const status = typeof error.status === 'number' ? error.status : 500;
-    const message = error.message || 'Internal server error';
-    console.error('Error in analytics-data API:', error);
+  } catch (rawError: unknown) {
+    const fallback = (rawError ?? {}) as { status?: number; message?: string };
+    const status = typeof fallback.status === 'number' ? fallback.status : 500;
+    const message = fallback.message || 'Internal server error';
+    console.error('Error in analytics-data API:', rawError);
     response.status(status).json({ message });
   }
 }

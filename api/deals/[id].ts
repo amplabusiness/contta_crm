@@ -3,6 +3,22 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireUser } from '../_lib/auth.ts';
 import { mapDealRecordToResponse } from '../utils/formatters.ts';
 
+type NullableString = string | null;
+
+interface DealRow extends Record<string, unknown> {
+  id: string;
+}
+
+interface AuthenticatedUser {
+  id: string;
+}
+
+interface DealHealthUpdate {
+  score?: number;
+  reasoning?: NullableString;
+  suggestedAction?: NullableString;
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!,
@@ -19,36 +35,129 @@ const httpCorsHeaders = {
 const toHttpError = (status: number, message: string) =>
   Object.assign(new Error(message), { status });
 
-const sanitizeUpdate = (body: any) => {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser =>
+  isRecord(value) && typeof value.id === 'string';
+
+const normalizeDealRow = (value: unknown): DealRow | null => {
+  if (!isRecord(value) || typeof value.id !== 'string') {
+    return null;
+  }
+
+  return { ...value, id: value.id } as DealRow;
+};
+
+const asNullableString = (value: unknown, field: string): NullableString => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  throw toHttpError(400, `Campo ${field} deve ser uma string.`);
+};
+
+const sanitizeHealthUpdate = (value: unknown): DealHealthUpdate => {
+  if (!isRecord(value)) {
+    throw toHttpError(400, 'Campo health deve ser um objeto.');
+  }
+
+  const updates: DealHealthUpdate = {};
+
+  if (value.score !== undefined) {
+    const parsedScore = Number(value.score);
+    if (!Number.isFinite(parsedScore)) {
+      throw toHttpError(400, 'Campo health.score deve ser numérico.');
+    }
+    updates.score = parsedScore;
+  }
+
+  if (value.reasoning !== undefined) {
+    updates.reasoning = asNullableString(value.reasoning, 'health.reasoning');
+  }
+
+  if (value.suggestedAction !== undefined) {
+    updates.suggestedAction = asNullableString(value.suggestedAction, 'health.suggestedAction');
+  }
+
+  return updates;
+};
+
+const sanitizeUpdate = (body: unknown) => {
+  if (!isRecord(body)) {
+    throw toHttpError(400, 'Corpo da requisição inválido.');
+  }
+
   const updates: Record<string, unknown> = {};
 
-  if (body.companyName !== undefined) updates.company_name = body.companyName;
-  if (body.contactName !== undefined) updates.contact_name = body.contactName;
-  if (body.contactEmail !== undefined) updates.contact_email = body.contactEmail;
+  if (body.companyName !== undefined) {
+    updates.company_name = asNullableString(body.companyName, 'companyName');
+  }
+
+  if (body.contactName !== undefined) {
+    updates.contact_name = asNullableString(body.contactName, 'contactName');
+  }
+
+  if (body.contactEmail !== undefined) {
+    updates.contact_email = asNullableString(body.contactEmail, 'contactEmail');
+  }
+
   if (body.value !== undefined) {
-    const parsedValue = Number(body.value);
+    const parsedValue = Number(body.value ?? 0);
     if (!Number.isFinite(parsedValue) || parsedValue < 0) {
       throw toHttpError(400, 'Campo value deve ser um número positivo.');
     }
     updates.value = parsedValue;
   }
+
   if (body.probability !== undefined) {
-    const parsedProbability = Number(body.probability);
+    const parsedProbability = Number(body.probability ?? 0);
     if (!Number.isFinite(parsedProbability) || parsedProbability < 0 || parsedProbability > 100) {
       throw toHttpError(400, 'Campo probability deve estar entre 0 e 100.');
     }
     updates.probability = parsedProbability;
   }
-  if (body.expectedCloseDate !== undefined) updates.expected_close_date = body.expectedCloseDate;
-  if (body.lastActivity !== undefined) updates.last_activity = body.lastActivity;
-  if (body.stage !== undefined) updates.stage = body.stage;
-  if (body.empresaCnpj !== undefined) updates.empresa_cnpj = body.empresaCnpj;
-  if (body.ownerId !== undefined) updates.owner_id = body.ownerId;
-  if (body.health) {
-    const { score, reasoning, suggestedAction } = body.health;
-    if (score !== undefined) updates.health_score = score;
-    if (reasoning !== undefined) updates.health_reasoning = reasoning;
-    if (suggestedAction !== undefined) updates.health_suggested_action = suggestedAction;
+
+  if (body.expectedCloseDate !== undefined) {
+    updates.expected_close_date = asNullableString(body.expectedCloseDate, 'expectedCloseDate');
+  }
+
+  if (body.lastActivity !== undefined) {
+    updates.last_activity = asNullableString(body.lastActivity, 'lastActivity');
+  }
+
+  if (body.stage !== undefined) {
+    const stageValue = body.stage;
+    if (stageValue === null) {
+      updates.stage = null;
+    } else if (typeof stageValue === 'string') {
+      updates.stage = stageValue;
+    } else {
+      throw toHttpError(400, 'Campo stage deve ser uma string.');
+    }
+  }
+
+  if (body.empresaCnpj !== undefined) {
+    updates.empresa_cnpj = asNullableString(body.empresaCnpj, 'empresaCnpj');
+  }
+
+  if (body.ownerId !== undefined) {
+    updates.owner_id = asNullableString(body.ownerId, 'ownerId');
+  }
+
+  if (body.health !== undefined && body.health !== null) {
+    const healthUpdates = sanitizeHealthUpdate(body.health);
+    if ('score' in healthUpdates && healthUpdates.score !== undefined) {
+      updates.health_score = healthUpdates.score;
+    }
+    if ('reasoning' in healthUpdates && healthUpdates.reasoning !== undefined) {
+      updates.health_reasoning = healthUpdates.reasoning;
+    }
+    if ('suggestedAction' in healthUpdates && healthUpdates.suggestedAction !== undefined) {
+      updates.health_suggested_action = healthUpdates.suggestedAction;
+    }
   }
 
   if (Object.keys(updates).length === 0) {
@@ -56,6 +165,23 @@ const sanitizeUpdate = (body: any) => {
   }
 
   return updates;
+};
+
+const extractErrorDetails = (
+  error: unknown,
+): { status: number; message: string; original: unknown } => {
+  if (error instanceof Error) {
+    const status = isRecord(error) && typeof error.status === 'number' ? error.status : 500;
+    return { status, message: error.message, original: error };
+  }
+
+  if (isRecord(error)) {
+    const status = typeof error.status === 'number' ? error.status : 500;
+    const message = typeof error.message === 'string' ? error.message : 'Internal server error';
+    return { status, message, original: error };
+  }
+
+  return { status: 500, message: 'Internal server error', original: error };
 };
 
 export default async function handler(
@@ -80,7 +206,10 @@ export default async function handler(
   }
 
   try {
-    await requireUser(request, supabase);
+    const user = await requireUser(request, supabase);
+    if (!isAuthenticatedUser(user)) {
+      throw toHttpError(500, 'Usuário autenticado inválido.');
+    }
 
     if (request.method === 'GET') {
       const { data, error } = await supabase
@@ -93,16 +222,18 @@ export default async function handler(
         throw error;
       }
 
-      if (!data) {
+      const record = normalizeDealRow(data);
+
+      if (!record) {
         throw toHttpError(404, 'Negócio não encontrado.');
       }
 
-      response.status(200).json(mapDealRecordToResponse(data));
+      response.status(200).json(mapDealRecordToResponse(record));
       return;
     }
 
     if (request.method === 'PATCH') {
-      const updates = sanitizeUpdate(request.body ?? {});
+      const updates = sanitizeUpdate(request.body as unknown);
 
       if (!updates.last_activity) {
         updates.last_activity = new Date().toISOString();
@@ -119,11 +250,13 @@ export default async function handler(
         throw status === 406 ? toHttpError(404, 'Negócio não encontrado.') : error;
       }
 
-      if (!data) {
+      const updatedDeal = normalizeDealRow(data);
+
+      if (!updatedDeal) {
         throw toHttpError(404, 'Negócio não encontrado.');
       }
 
-      response.status(200).json(mapDealRecordToResponse(data));
+      response.status(200).json(mapDealRecordToResponse(updatedDeal));
       return;
     }
 
@@ -142,11 +275,9 @@ export default async function handler(
     }
 
     response.status(405).json({ message: 'Method not allowed' });
-  } catch (rawError: any) {
-    const error = rawError ?? {};
-    const status = typeof error.status === 'number' ? error.status : 500;
-    const message = error.message || 'Internal server error';
-    console.error('Error in deals detail API:', error);
+  } catch (rawError: unknown) {
+    const { status, message, original } = extractErrorDetails(rawError);
+    console.error('Error in deals detail API:', original);
     response.status(status).json({ message });
   }
 }
